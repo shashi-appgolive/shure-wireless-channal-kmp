@@ -1,0 +1,85 @@
+# =========================
+# Root / Gradle / Kotlin Multiplatform
+# =========================
+.gradle/
+.kotlin/
+build/
+*/build/
+**/build/
+out/
+local.properties
+captures/
+.cxx/
+*.log
+*.hprof
+
+# Kotlin/JS
+kotlin-js-store/yarn.lock
+
+# IDE - IntelliJ / Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# macOS
+.DS_Store
+
+# Environment / secrets
+*.env
+.env.local
+
+# =========================
+# Android (androidApp)
+# =========================
+androidApp/build/
+androidApp/.cxx/
+androidApp/release/
+androidApp/debug/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+.externalNativeBuild/
+*.keystore
+!debug.keystore
+
+# =========================
+# iOS (iosApp)
+# =========================
+iosApp/build/
+iosApp/DerivedData/
+iosApp/*.xcworkspace/xcuserdata/
+iosApp/**/xcuserdata/
+iosApp/**/*.xcuserstate
+iosApp/Pods/
+iosApp/Podfile.lock
+iosApp/*.xcodeproj/project.xcworkspace/xcuserdata/
+iosApp/*.xcodeproj/xcuserdata/
+iosApp/.build/
+iosApp/fastlane/report.xml
+iosApp/fastlane/Preview.html
+iosApp/fastlane/screenshots
+iosApp/fastlane/test_output
+*.moved-aside
+*.xcuserstate
+*.xcscmblueprint
+DerivedData/
+Pods/
+Carthage/Build/
+.swiftpm/
+.build/
+
+# =========================
+# Web App (webApp - Kotlin/JS)
+# =========================
+webApp/build/
+webApp/node_modules/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm/
+dist/
+webApp/dist/
