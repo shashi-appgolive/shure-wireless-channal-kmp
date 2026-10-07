@@ -21,6 +21,7 @@ interface RazorSdk {
 
 interface AudioMeterApi {
     fun observe(channelId: String, types: List<MeterChangeType> = listOf(MeterChangeType.AUDIO_CHANNEL_CLIP, MeterChangeType.AUDIO_CHANNEL_PEAK, MeterChangeType.AUDIO_CHANNEL_RMS), updateRate: String = "PT0.1S"): Flow<AudioMeterChange>
+    fun rmsProgress(rmsValue: Double, deviceModel: String): Float
 }
 
 interface RfMeterApi {
@@ -51,6 +52,18 @@ class DefaultRazorSdk(
             types: List<MeterChangeType>,
             updateRate: String,
         ): Flow<AudioMeterChange> = subscription.observe(channelId, types, updateRate)
+
+        override fun rmsProgress(rmsValue: Double, deviceModel: String): Float {
+            val model = deviceModel.uppercase()
+            val (min, max) = when {
+                model.contains("PSM") && (model.contains("AD") || model.contains("ADX5D")) -> -54.0 to 0.0
+                model.contains("PSM") -> -30.0 to 25.0
+                model.contains("AD") || model.contains("ADX5D") -> -55.0 to 0.0
+                model.contains("ULXD") || model.contains("QLXD") || model.contains("SLXD") -> -41.0 to 0.0
+                else -> -41.0 to 0.0
+            }
+            return ((rmsValue - min) / (max - min)).coerceIn(0.0, 1.0).toFloat()
+        }
     }
     override val rfMeters: RfMeterApi = object : RfMeterApi {
         private val subscription = RfMeterSubscription(webSocketClient)

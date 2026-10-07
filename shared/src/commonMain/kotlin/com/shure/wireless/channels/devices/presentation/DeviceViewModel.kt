@@ -33,6 +33,9 @@ class DeviceViewModel(
     private val listenDeviceEventsUseCase: ListenDeviceEventsUseCase,
 ) : ViewModel() {
 
+    fun audioMeterProgress(rmsValue: Double, deviceModel: String): Float =
+        razorSdk.audioMeters.rmsProgress(rmsValue, deviceModel)
+
     private val _uiState = MutableStateFlow(DeviceUiState(isLoading = true))
     val uiState: StateFlow<DeviceUiState> = _uiState.asStateFlow()
 
@@ -193,7 +196,18 @@ class DeviceViewModel(
             _uiState.update { it.copy(isUpdatingDeviceName = true, errorMessage = null) }
             when (val result = razorSdk.devices.updateName(deviceId, trimmedName, address)) {
                 is com.shure.wireless.channels.razorsdk.SdkResult.Success ->
-                    _uiState.update { it.copy(isUpdatingDeviceName = false) }
+                    _uiState.update { state ->
+                        state.copy(
+                            isUpdatingDeviceName = false,
+                            discoveredConnections = state.discoveredConnections.map { device ->
+                                if (device.id == deviceId) {
+                                    device.copy(features = device.features.copy(name = trimmedName))
+                                } else {
+                                    device
+                                }
+                            },
+                        )
+                    }
                 is com.shure.wireless.channels.razorsdk.SdkResult.Failure ->
                     _uiState.update { it.copy(isUpdatingDeviceName = false, errorMessage = result.error.toString()) }
             }

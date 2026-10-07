@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -40,6 +41,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,8 +50,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -78,18 +85,440 @@ private val EventBlue = ShureColors.Event
 @Composable
 fun App(viewModel: DeviceViewModel = koinViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    DeviceConsoleScreen(
+    WorkbenchScreen(
         state = uiState,
         onDiscover = viewModel::discoverDevices,
-        onGetDeviceModels = viewModel::getDeviceModels,
         onStartListening = viewModel::startListening,
         onStopListening = viewModel::stopListening,
         onStartRfListening = viewModel::startRfListening,
         onStopRfListening = viewModel::stopRfListening,
-        onUpdateDeviceName = { deviceId, name -> viewModel.updateDeviceName(defaultGraphQlBaseUrl(), deviceId, name) },
-        onUpdateAudioGain = { channelId, gain -> viewModel.updateAudioChannelGain(defaultGraphQlBaseUrl(), channelId, gain) },
+        onUpdateDeviceName = { id, name -> viewModel.updateDeviceName(defaultGraphQlBaseUrl(), id, name) },
+        onUpdateAudioGain = { id, gain -> viewModel.updateAudioChannelGain(defaultGraphQlBaseUrl(), id, gain) },
+        meterProgress = viewModel::audioMeterProgress,
         onClearError = viewModel::clearError,
     )
+}
+
+@Composable
+private fun WorkbenchScreen(
+    state: DeviceUiState,
+    onDiscover: (String) -> Unit,
+    onStartListening: (String) -> Unit,
+    onStopListening: (String) -> Unit,
+    onStartRfListening: (String) -> Unit,
+    onStopRfListening: (String) -> Unit,
+    onUpdateDeviceName: (String, String) -> Unit,
+    onUpdateAudioGain: (String, Int) -> Unit,
+    meterProgress: (Double, String) -> Float,
+    onClearError: () -> Unit,
+) {
+    var address by remember { mutableStateOf(defaultGraphQlBaseUrl()) }
+    var draftAddress by remember { mutableStateOf(address) }
+    var showEndpointEditor by remember { mutableStateOf(false) }
+    var selectedChannel by remember { mutableStateOf<Pair<DiscoveredDevice, Int>?>(null) }
+
+    LaunchedEffect(address) { onDiscover(address) }
+
+    if (selectedChannel != null) {
+        val (device, channelIndex) = requireNotNull(selectedChannel)
+        ShureTheme {
+        DeviceDetailsScreen(
+            device = device,
+            channelIndex = channelIndex,
+            audioMeters = state.audioMeters,
+            rfMeters = state.rfMeters,
+            meterProgress = meterProgress,
+            onStartListening = onStartListening,
+            onStopListening = onStopListening,
+            onStartRfListening = onStartRfListening,
+            onStopRfListening = onStopRfListening,
+            onUpdateDeviceName = onUpdateDeviceName,
+            onUpdateAudioGain = onUpdateAudioGain,
+            onRefresh = { onDiscover(address) },
+            onBack = { selectedChannel = null },
+        )
+        }
+        return
+    }
+    DisposableEffect(state.discoveredConnections) {
+        val channelIds = state.discoveredConnections.flatMap { device -> device.features.audioChannels.map { it.id } }
+        val rfChannelIds = state.discoveredConnections.flatMap { device -> device.features.rfChannels.map { it.id } }
+        channelIds.forEach(onStartListening)
+        rfChannelIds.forEach(onStartRfListening)
+        onDispose {
+            channelIds.forEach(onStopListening)
+            rfChannelIds.forEach(onStopRfListening)
+        }
+    }
+
+    ShureTheme {
+        Surface(Modifier.fillMaxSize(), color = Color.Black) {
+            Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+                Row(
+                    Modifier.fillMaxWidth().background(ConsoleSurface).padding(horizontal = 24.dp, vertical = 24.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Inventory", color = Color.White, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { draftAddress = address; showEndpointEditor = true }) {
+                            Text("✎", color = ShureGreen, fontSize = 24.sp)
+                        }
+                        IconButton(onClick = { onDiscover(address) }) {
+                            Text("↻", color = ShureGreen, fontSize = 24.sp)
+                        }
+                    }
+                }
+                if (state.discoveredConnections.isNotEmpty()) {
+                    WorkbenchDeviceList(state.discoveredConnections, state.audioMeters, state.rfMeters, meterProgress) { device, index -> selectedChannel = device to index }
+                } else {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("⌁", color = ShureGreen, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.size(10.dp))
+                        Text("Device Discovery", color = ShureGreen, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(42.dp))
+                    Text(
+                        if (state.isDiscovering) "Discovering\ndevices on\nyour network" else "Devices on\nyour network",
+                        color = Color.White,
+                        fontSize = 38.sp,
+                        lineHeight = 46.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(48.dp))
+                    if (state.isDiscovering) {
+                        CircularProgressIndicator(Modifier.size(18.dp), color = ShureGreen, strokeWidth = 3.dp)
+                    } else if (state.discoveredConnections.isNotEmpty()) {
+                        Text("${state.discoveredConnections.size} device(s) found", color = ShureGreen, fontSize = 18.sp)
+                    }
+                        state.errorMessage?.let {
+                            ErrorBanner(
+                                message = it,
+                                onDismiss = onClearError,
+                                onRetry = { onDiscover(address) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        if (showEndpointEditor) {
+            AlertDialog(
+                onDismissRequest = { showEndpointEditor = false },
+                title = { Text("Base URL") },
+                text = { OutlinedTextField(draftAddress, { draftAddress = it }, label = { Text("GraphQL base URL") }, singleLine = true) },
+                confirmButton = {
+                    Button(onClick = { address = draftAddress.trim(); showEndpointEditor = false }, enabled = draftAddress.isNotBlank()) { Text("Update") }
+                },
+                dismissButton = { OutlinedButton(onClick = { showEndpointEditor = false }) { Text("Cancel") } },
+            )
+        }
+    }
+}
+
+@Composable
+private fun WorkbenchDeviceList(
+    devices: List<DiscoveredDevice>,
+    audioMeters: Map<String, com.shure.wireless.channels.devices.domain.model.AudioMeterChange>,
+    rfMeters: Map<String, com.shure.wireless.channels.devices.domain.model.RfMeterChange>,
+    meterProgress: (Double, String) -> Float,
+    onDeviceClick: (DiscoveredDevice, Int) -> Unit,
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    val filteredDevices = devices.filter { device ->
+        val searchableText = buildString {
+            append(device.features.name).append(' ')
+            append(device.interfaceInfo?.model).append(' ')
+            append(device.interfaceInfo?.category).append(' ')
+            append(device.interfaceInfo?.type).append(' ')
+            append(device.status).append(' ')
+            append(device.features.rfBand).append(' ')
+            device.features.audioChannels.forEach { append(it.features.name).append(' ') }
+            device.features.rfChannels.forEach {
+                append(it.assignedRfProfile).append(' ')
+                append(it.tuning?.frequency).append(' ')
+            }
+        }
+        searchQuery.isBlank() || searchableText.contains(searchQuery.trim(), ignoreCase = true)
+    }
+    val totalChannels = filteredDevices.sumOf { it.features.rfChannels.size }
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        item {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${filteredDevices.size}/${devices.size} devices · $totalChannels channels",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                )
+            }
+        }
+        item {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Find in inventory") },
+                singleLine = true,
+            )
+        }
+        items(filteredDevices, key = { it.id }) { device ->
+            val deviceName = device.features.name ?: device.id
+            val model = device.interfaceInfo?.model ?: "Shure device"
+            val meterDeviceType = listOf(
+                model,
+                device.interfaceInfo?.category,
+                device.interfaceInfo?.type,
+            ).joinToString(" ")
+            val channels = device.features.rfChannels
+            Column(
+                Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(22.dp),
+            ) {
+                channels.forEachIndexed { index, channel ->
+                    val frequency = channel.tuning?.frequency?.let { formatWorkbenchFrequency(it) } ?: "—"
+                    val rfBand = channel.assignedRfBand?.band ?: device.features.rfBand ?: "—"
+                    val audioChannelName = device.features.audioChannels.getOrNull(index)?.features?.name
+                    val channelName = audioChannelName
+                        ?: channel.assignedRfProfile
+                        ?: channel.tuning?.channel
+                        ?: "Channel ${index + 1}"
+                    Row(Modifier.fillMaxWidth().clickable { onDeviceClick(device, index) }, verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(44.dp).background(Color(0xFF202124), CircleShape), contentAlignment = Alignment.Center) {
+                            Text("${index + 1}", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.size(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(
+                                    channelName.take(10) + if (channelName.length > 10) "…" else "",
+                                    color = Color.White,
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Column(
+                                    Modifier.width(72.dp),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                                ) {
+                                    TinyRfMeter(
+                                        level = rfMeters[channel.id]?.antennas?.firstOrNull { it.antenna.endsWith("A") }?.level,
+                                    )
+                                    TinyRfMeter(
+                                        level = rfMeters[channel.id]?.antennas?.firstOrNull { it.antenna.endsWith("B") }?.level,
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            AudioMeter(
+                                progress = audioMeters[device.features.audioChannels.getOrNull(index)?.id]?.rmsLevel
+                                    ?.let { meterProgress(it, meterDeviceType) } ?: 0f,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    buildAnnotatedString {
+                                        withStyle(SpanStyle(color = MutedText)) {
+                                            append("$model · $rfBand · ")
+                                        }
+                                        withStyle(SpanStyle(color = ShureGreen)) {
+                                            append(deviceName)
+                                        }
+                                    },
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    frequency,
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatWorkbenchFrequency(frequency: Double): String {
+    val digits = frequency.toLong().toString()
+    if (digits.length <= 3) return "$digits MHz"
+    return "${digits.dropLast(3)}.${digits.takeLast(3)} MHz"
+}
+
+@Composable
+private fun TinyRfMeter(level: Double?, modifier: Modifier = Modifier) {
+    val progress = level?.let { ((it + 90.0) / 90.0).coerceIn(0.0, 1.0).toFloat() } ?: 0f
+    Box(modifier.height(4.dp).background(Color(0xFF303030), RoundedCornerShape(8.dp))) {
+        Box(Modifier.fillMaxWidth(progress).height(4.dp).background(ShureGreen, RoundedCornerShape(8.dp)))
+    }
+}
+
+@Composable
+private fun AudioMeter(
+    progress: Float,
+) {
+    androidx.compose.foundation.layout.BoxWithConstraints(
+        Modifier
+            .fillMaxWidth()
+            .height(5.dp)
+            .background(Color(0xFF252525), RoundedCornerShape(8.dp)),
+    ) {
+        val meterWidthPx = with(androidx.compose.ui.platform.LocalDensity.current) { maxWidth.toPx() }
+        Box(
+            Modifier
+                .fillMaxWidth(progress)
+                .height(5.dp)
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(ShureGreen, Color(0xFFFFD54F), Color(0xFFE85D5D)),
+                        startX = 0f,
+                        endX = meterWidthPx.coerceAtLeast(1f),
+                    ),
+                    RoundedCornerShape(8.dp),
+                ),
+        )
+    }
+}
+
+@Composable
+private fun DeviceDetailsScreen(
+    device: DiscoveredDevice,
+    channelIndex: Int,
+    audioMeters: Map<String, com.shure.wireless.channels.devices.domain.model.AudioMeterChange>,
+    rfMeters: Map<String, com.shure.wireless.channels.devices.domain.model.RfMeterChange>,
+    meterProgress: (Double, String) -> Float,
+    onStartListening: (String) -> Unit,
+    onStopListening: (String) -> Unit,
+    onStartRfListening: (String) -> Unit,
+    onStopRfListening: (String) -> Unit,
+    onUpdateDeviceName: (String, String) -> Unit,
+    onUpdateAudioGain: (String, Int) -> Unit,
+    onRefresh: () -> Unit,
+    onBack: () -> Unit,
+) {
+    val model = device.interfaceInfo?.model ?: "Shure device"
+    val rfChannel = device.features.rfChannels.getOrNull(channelIndex)
+    val audioChannel = device.features.audioChannels.getOrNull(channelIndex)
+    var showNameEditor by remember { mutableStateOf(false) }
+    var nameInput by remember { mutableStateOf(device.features.name ?: device.id) }
+    var displayDeviceName by remember { mutableStateOf(device.features.name ?: device.id) }
+    var gainInput by remember { mutableStateOf((audioChannel?.features?.gain ?: 0.0).toInt()) }
+    DisposableEffect(audioChannel?.id) {
+        audioChannel?.id?.let(onStartListening)
+        onDispose { audioChannel?.id?.let(onStopListening) }
+    }
+    DisposableEffect(device.id) {
+        val ids = listOfNotNull(rfChannel?.id)
+        ids.forEach(onStartRfListening)
+        onDispose { ids.forEach(onStopRfListening) }
+    }
+    Column(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.safeDrawing)) {
+        Row(
+            Modifier.fillMaxWidth().background(ConsoleSurface).padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) { Text("‹", color = ShureGreen, fontSize = 38.sp) }
+            Text(audioChannel?.features?.name ?: "Channel ${channelIndex + 1}", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            IconButton(onClick = { nameInput = device.features.name ?: device.id; showNameEditor = true }) { Text("✎", color = ShureGreen, fontSize = 24.sp) }
+            IconButton(onClick = onRefresh) { Text("↻", color = ShureGreen, fontSize = 24.sp) }
+        }
+        LazyColumn(
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            item {
+                Text(
+                    displayDeviceName,
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                )
+            }
+            item { Text("ALERTS (0)", color = MutedText, modifier = Modifier.padding(horizontal = 24.dp)) }
+            item {
+                Text("CHANNEL RADIO FREQUENCY", color = MutedText, modifier = Modifier.padding(horizontal = 24.dp))
+            }
+            rfChannel?.let { channel ->
+                val frequency = channel.tuning?.frequency?.let { formatWorkbenchFrequency(it) } ?: "—"
+                val meter = rfMeters[channel.id]
+                item {
+                    Column(Modifier.fillMaxWidth().background(ConsoleSurface).padding(horizontal = 24.dp, vertical = 14.dp)) {
+                    Text("Antenna A", color = MutedText, fontSize = 11.sp)
+                    TinyRfMeter(meter?.antennas?.firstOrNull { it.antenna.endsWith("A") }?.level)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Antenna B", color = MutedText, fontSize = 11.sp)
+                    TinyRfMeter(meter?.antennas?.firstOrNull { it.antenna.endsWith("B") }?.level)
+                    Spacer(Modifier.height(12.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Frequency", color = Color.White, fontSize = 18.sp)
+                        Text(frequency, color = MutedText, fontSize = 18.sp)
+                    }
+                    Text("RF band: ${channel.assignedRfBand?.band ?: device.features.rfBand ?: "—"}", color = MutedText, fontSize = 12.sp)
+                    }
+                }
+            }
+            item { Text("CHANNEL AUDIO", color = MutedText, modifier = Modifier.padding(horizontal = 24.dp)) }
+            audioChannel?.let { channel ->
+                val rms = audioMeters[channel.id]?.rmsLevel
+                item {
+                    Column(Modifier.fillMaxWidth().background(ConsoleSurface).padding(horizontal = 24.dp, vertical = 14.dp)) {
+                    Text(channel.features.name ?: channel.id, color = Color.White, fontSize = 18.sp)
+                    Spacer(Modifier.height(8.dp))
+                    AudioMeter(progress = rms?.let { meterProgress(it, model) } ?: 0f)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Audio Gain", color = Color.White, fontSize = 18.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${gainInput} dB", color = Color.White, fontSize = 16.sp)
+                            IconButton(
+                                onClick = { gainInput -= 1; onUpdateAudioGain(channel.id, gainInput) },
+                                modifier = Modifier.size(32.dp),
+                            ) { Text("−", color = ShureGreen, fontSize = 20.sp) }
+                            IconButton(
+                                onClick = { gainInput += 1; onUpdateAudioGain(channel.id, gainInput) },
+                                modifier = Modifier.size(32.dp),
+                            ) { Text("+", color = ShureGreen, fontSize = 20.sp) }
+                        }
+                    }
+                    }
+                }
+            }
+            item { Text("RECEIVER", color = MutedText, modifier = Modifier.padding(horizontal = 24.dp)) }
+            item {
+                Column(Modifier.fillMaxWidth().background(ConsoleSurface).padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Device Name      $displayDeviceName", color = Color.White)
+                    Text("Receiver ID       ${device.features.serialNumber ?: device.id}", color = Color.White)
+                    Text("Receiver Model    $model", color = Color.White)
+                    Text("Connection        ${device.status ?: "Network"}", color = Color.White)
+                }
+            }
+        }
+    }
+    if (showNameEditor) {
+        AlertDialog(
+            onDismissRequest = { showNameEditor = false },
+            title = { Text("Update device name") },
+            text = { OutlinedTextField(nameInput, { nameInput = it }, label = { Text("Device name") }, singleLine = true) },
+            confirmButton = {
+                Button(onClick = {
+                    onUpdateDeviceName(device.id, nameInput)
+                    displayDeviceName = nameInput.trim()
+                    showNameEditor = false
+                }, enabled = nameInput.isNotBlank()) { Text("Update") }
+            },
+            dismissButton = { OutlinedButton(onClick = { showNameEditor = false }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable
@@ -603,14 +1032,26 @@ private fun EmptyPanel(message: String) {
 }
 
 @Composable
-private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
+private fun ErrorBanner(
+    message: String,
+    onDismiss: () -> Unit,
+    onRetry: (() -> Unit)? = null,
+) {
     Row(
         modifier = Modifier.fillMaxWidth().background(ErrorRed.copy(alpha = 0.12f), RoundedCornerShape(10.dp)).padding(12.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(message, color = ErrorRed, modifier = Modifier.weight(1f))
-        OutlinedButton(onClick = onDismiss) { Text("Dismiss") }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            onRetry?.let { retry ->
+                Button(
+                    onClick = retry,
+                    colors = ButtonDefaults.buttonColors(containerColor = ShureGreen, contentColor = Color.Black),
+                ) { Text("Try again") }
+            }
+            OutlinedButton(onClick = onDismiss) { Text("Dismiss") }
+        }
     }
 }
 
