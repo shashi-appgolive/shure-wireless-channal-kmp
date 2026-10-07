@@ -200,6 +200,20 @@ class DeviceViewModel(
         }
     }
 
+    fun updateAudioChannelGain(address: String, channelId: String, gain: Int) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUpdatingAudioGain = true, errorMessage = null) }
+            when (val result = razorSdk.devices.updateAudioChannelGain(channelId, gain.toDouble(), address)) {
+                is com.shure.wireless.channels.razorsdk.SdkResult.Success -> {
+                    _uiState.update { it.copy(isUpdatingAudioGain = false) }
+                }
+                is com.shure.wireless.channels.razorsdk.SdkResult.Failure -> {
+                    _uiState.update { it.copy(isUpdatingAudioGain = false, errorMessage = result.error.toString()) }
+                }
+            }
+        }
+    }
+
     override fun onCleared() {
         meterJobs.values.forEach(Job::cancel)
         meterJobs.clear()

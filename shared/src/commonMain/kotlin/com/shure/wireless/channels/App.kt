@@ -22,9 +22,14 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,6 +87,7 @@ fun App(viewModel: DeviceViewModel = koinViewModel()) {
         onStartRfListening = viewModel::startRfListening,
         onStopRfListening = viewModel::stopRfListening,
         onUpdateDeviceName = { deviceId, name -> viewModel.updateDeviceName(defaultGraphQlBaseUrl(), deviceId, name) },
+        onUpdateAudioGain = { channelId, gain -> viewModel.updateAudioChannelGain(defaultGraphQlBaseUrl(), channelId, gain) },
         onClearError = viewModel::clearError,
     )
 }
@@ -95,6 +102,7 @@ fun DeviceConsoleScreen(
     onStartRfListening: (String) -> Unit = {},
     onStopRfListening: (String) -> Unit = {},
     onUpdateDeviceName: (String, String) -> Unit = { _, _ -> },
+    onUpdateAudioGain: (String, Int) -> Unit = { _, _ -> },
     onClearError: () -> Unit = {},
 ) {
     var address by remember { mutableStateOf(defaultGraphQlBaseUrl()) }
@@ -105,6 +113,7 @@ fun DeviceConsoleScreen(
             Surface(modifier = Modifier.fillMaxSize(), color = ConsoleBackground) {
                 DeviceModelsScreen(
                     models = state.deviceModels,
+                    isLoading = state.isLoadingDeviceModels,
                     onBack = { showDeviceModels = false },
                 )
             }
@@ -122,6 +131,7 @@ fun DeviceConsoleScreen(
                     onStartRfListening = onStartRfListening,
                     onStopRfListening = onStopRfListening,
                     onUpdateDeviceName = onUpdateDeviceName,
+                    onUpdateAudioGain = onUpdateAudioGain,
                     onDismiss = { selectedConnection = null },
                     fullScreen = true,
                 )
@@ -145,7 +155,6 @@ fun DeviceConsoleScreen(
                         onAddressChange = { address = it },
                         state = state,
                         onDiscover = { onDiscover(address) },
-                        onGetDeviceModels = { onGetDeviceModels(address) },
                     )
                 }
                 state.errorMessage?.let { message -> item { ErrorBanner(message, onClearError) } }
@@ -153,14 +162,14 @@ fun DeviceConsoleScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(enabled = state.deviceModels.isNotEmpty()) { showDeviceModels = true },
+                            .clickable { onGetDeviceModels(address); showDeviceModels = true },
                         colors = CardDefaults.cardColors(containerColor = ConsoleSurface),
                     ) {
                         Column(Modifier.padding(14.dp)) {
                             Text("DEVICE MODELS", color = ShureGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                             Text(
-                                if (state.deviceModels.isEmpty()) "Use Get Device Models to load supported models."
-                                else "${state.deviceModels.size} models available · Tap to view",
+                                if (state.deviceModels.isEmpty()) "View supported device models"
+                                else "${state.deviceModels.size} models available · Tap to refresh",
                                 color = MutedText,
                             )
                         }
@@ -200,6 +209,7 @@ fun DeviceConsoleScreen(
 @Composable
 private fun DeviceModelsScreen(
     models: List<String>,
+    isLoading: Boolean,
     onBack: () -> Unit,
 ) {
     Column(
@@ -211,12 +221,16 @@ private fun DeviceModelsScreen(
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("DEVICE MODELS", color = ShureGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-            OutlinedButton(onClick = onBack) { Text("Back") }
+            IconButton(onClick = onBack) { Text("×", color = Color.White, fontSize = 26.sp) }
         }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(models, key = { it }) { model ->
-                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ConsoleSurface)) {
-                    Text(model, Modifier.padding(14.dp), color = Color.White, fontWeight = FontWeight.Bold)
+        if (isLoading) {
+            CircularProgressIndicator(color = ShureGreen)
+        } else {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(models, key = { it }) { model ->
+                    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ConsoleSurface)) {
+                        Text(model, Modifier.padding(14.dp), color = Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
@@ -232,11 +246,14 @@ private fun ConnectionDetailsPanel(
     onStartRfListening: (String) -> Unit,
     onStopRfListening: (String) -> Unit,
     onUpdateDeviceName: (String, String) -> Unit,
+    onUpdateAudioGain: (String, Int) -> Unit,
     onDismiss: () -> Unit,
     fullScreen: Boolean = false,
 ) {
     var isEditingName by remember { mutableStateOf(false) }
     var editedName by remember(device.id) { mutableStateOf(device.features.name ?: device.interfaceInfo?.model.orEmpty()) }
+    var gainChannelId by remember { mutableStateOf<String?>(null) }
+    var gainInput by remember { mutableStateOf("") }
     val content: @Composable () -> Unit = {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -246,9 +263,9 @@ private fun ConnectionDetailsPanel(
             Text("DEVICE DETAILS", color = ShureGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (!isEditingName) {
-                    OutlinedButton(onClick = { isEditingName = true }) { Text("Edit") }
+                    IconButton(onClick = { isEditingName = true }) { Text("✎", color = ShureGreen, fontSize = 20.sp) }
                 }
-                OutlinedButton(onClick = onDismiss) { Text(if (fullScreen) "Back" else "Close") }
+                IconButton(onClick = onDismiss) { Text("×", color = Color.White, fontSize = 26.sp) }
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -278,8 +295,13 @@ private fun ConnectionDetailsPanel(
                     Text("${index + 1}. ${channel.features.name ?: channel.id}", color = Color.White)
                     Text("Gain: ${channel.features.gain ?: "—"} · Peak: ${meter?.peakLevel ?: "—"} · RMS: ${meter?.rmsLevel ?: "—"}", color = MutedText)
                 }
-                OutlinedButton(onClick = { if (isListening) onStopListening(channel.id) else onStartListening(channel.id) }) {
-                    Text(if (isListening) "Stop" else "Listen")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    IconButton(onClick = { gainChannelId = channel.id; gainInput = channel.features.gain?.toInt()?.toString().orEmpty() }) {
+                        Text("✎", color = ShureGreen, fontSize = 20.sp)
+                    }
+                    IconButton(onClick = { if (isListening) onStopListening(channel.id) else onStartListening(channel.id) }) {
+                        Text(if (isListening) "■" else "▶", color = ShureGreen, fontSize = 16.sp)
+                    }
                 }
             }
         }
@@ -295,8 +317,8 @@ private fun ConnectionDetailsPanel(
                     Text("${device.features.serialNumber ?: "RF Channel ${index + 1}"}", color = Color.White)
                     Text("A_A: ${antennaA ?: "—"} · A_B: ${antennaB ?: "—"}", color = MutedText)
                 }
-                OutlinedButton(onClick = { if (isListening) onStopRfListening(channel.id) else onStartRfListening(channel.id) }) {
-                    Text(if (isListening) "Stop" else "Listen")
+                IconButton(onClick = { if (isListening) onStopRfListening(channel.id) else onStartRfListening(channel.id) }) {
+                    Text(if (isListening) "■" else "▶", color = ShureGreen, fontSize = 16.sp)
                 }
             }
         }
@@ -306,10 +328,33 @@ private fun ConnectionDetailsPanel(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical))
+                .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) { content() }
     } else {
         ConsoleCard { content() }
+    }
+    gainChannelId?.let { channelId ->
+        AlertDialog(
+            onDismissRequest = { if (!state.isUpdatingAudioGain) gainChannelId = null },
+            title = { Text("Update gain") },
+            text = {
+                OutlinedTextField(
+                    value = gainInput,
+                    onValueChange = { value -> if (value.isEmpty() || value.toIntOrNull() != null) gainInput = value },
+                    label = { Text("Gain") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                )
+            },
+            confirmButton = {
+                Button(
+                    enabled = !state.isUpdatingAudioGain && gainInput.toIntOrNull() != null,
+                    onClick = { onUpdateAudioGain(channelId, gainInput.toInt()); gainChannelId = null },
+                ) { Text(if (state.isUpdatingAudioGain) "Saving…" else "Save") }
+            },
+            dismissButton = { OutlinedButton(enabled = !state.isUpdatingAudioGain, onClick = { gainChannelId = null }) { Text("Cancel") } },
+        )
     }
 }
 
@@ -335,7 +380,6 @@ private fun ActionPanel(
     onAddressChange: (String) -> Unit,
     state: DeviceUiState,
     onDiscover: () -> Unit,
-    onGetDeviceModels: () -> Unit,
 ) {
     ConsoleCard {
         Text("OPERATIONS", color = ShureGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
@@ -353,14 +397,6 @@ private fun ActionPanel(
             loading = state.isDiscovering,
             enabled = !state.isDiscovering,
             onClick = onDiscover,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Spacer(Modifier.height(10.dp))
-        OperationButton(
-            text = if (state.isLoadingDeviceModels) "Loading Models…" else "Get Device Models",
-            loading = state.isLoadingDeviceModels,
-            enabled = !state.isLoadingDeviceModels,
-            onClick = onGetDeviceModels,
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(10.dp))

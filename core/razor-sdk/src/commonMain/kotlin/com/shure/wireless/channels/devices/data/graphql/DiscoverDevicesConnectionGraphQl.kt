@@ -125,7 +125,7 @@ private fun FeaturesNode.toDeviceFeatures(): DomainDeviceFeatures = DomainDevice
     networkSwitchMode = networkSwitchConfiguration?.mode,
     controlNetwork = controlNetwork?.`interface`?.let { ControlNetworkFeature(it.ipMode, it.ipAddress, it.subnetMask, it.gateway, it.macAddress) },
     danteAudioNetworkName = danteAudioNetwork?.name,
-    audioChannels = audioChannels?.audioChannels.orEmpty().map { channel ->
+    audioChannels = audioChannels?.audioChannels.orEmpty().mapNotNull { channel ->
         AudioChannel(channel.id, channel.features?.let { feature ->
             AudioChannelFeatures(
                 name = feature.name?.name,
@@ -142,7 +142,7 @@ private fun FeaturesNode.toDeviceFeatures(): DomainDeviceFeatures = DomainDevice
                 rmsLevelRange = constraints.rms?.level?.range?.let { range -> ValueRange(range.min, range.max) },
                 gainRange = constraints.gain?.gain?.range?.let { range -> ValueRange(range.min, range.max) },
             )
-        } ?: AudioChannelConstraints())
+        } ?: AudioChannelConstraints()).takeIf { !it.features.name.isNullOrBlank() }
     },
     rfChannels = rfChannels?.rfChannels.orEmpty().map { channel ->
         val feature = channel.features

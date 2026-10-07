@@ -25,6 +25,7 @@ data class DeviceUiState(
     val rfMeters: Map<String, RfMeterChange> = emptyMap(),
     val listeningRfChannelIds: Set<String> = emptySet(),
     val isUpdatingDeviceName: Boolean = false,
+    val isUpdatingAudioGain: Boolean = false,
     val isListening: Boolean = false,
     val errorMessage: String? = null,
 )
