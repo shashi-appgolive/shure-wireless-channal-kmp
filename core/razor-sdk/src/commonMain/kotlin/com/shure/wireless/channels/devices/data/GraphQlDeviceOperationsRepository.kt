@@ -5,6 +5,7 @@ import com.shure.wireless.channels.core.network.ApiResult
 import com.shure.wireless.channels.devices.data.graphql.DeviceDiscoveryGraphQlApi
 import com.shure.wireless.channels.devices.data.graphql.toStoredDevices
 import com.shure.wireless.channels.devices.domain.model.DeviceEvent
+import com.shure.wireless.channels.devices.domain.model.DiscoveredDevicesConnection
 import com.shure.wireless.channels.devices.domain.model.StoredDevice
 import com.shure.wireless.channels.devices.domain.repository.DeviceOperationsRepository
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +32,28 @@ class GraphQlDeviceOperationsRepository(
     override suspend fun getDeviceModels(address: String): List<String> {
         val endpoint = address.toGraphQlEndpoint()
         return when (val result = discoveryApi.getDeviceModels(endpoint)) {
+            is ApiResult.Success -> result.data
+            is ApiResult.Error -> throw result.exception
+        }
+    }
+
+    override suspend fun updateName(address: String, deviceId: String, name: String): StoredDevice {
+        val endpoint = address.toGraphQlEndpoint()
+        return when (val result = discoveryApi.updateName(deviceId, name, endpoint)) {
+            is ApiResult.Success -> StoredDevice(id = result.data.id, name = result.data.features?.name?.name ?: name, lastSeenAtEpochMillis = 1L)
+            is ApiResult.Error -> throw result.exception
+        }
+    }
+
+    override suspend fun updateAudioChannelGain(address: String, channelId: String, gain: Double): Double =
+        when (val result = discoveryApi.updateAudioChannelGain(channelId, gain, address.toGraphQlEndpoint())) {
+            is ApiResult.Success -> result.data
+            is ApiResult.Error -> throw result.exception
+        }
+
+    override suspend fun discoverDevicesConnection(address: String): DiscoveredDevicesConnection {
+        val endpoint = address.toGraphQlEndpoint()
+        return when (val result = discoveryApi.discoverDevicesConnection(endpoint)) {
             is ApiResult.Success -> result.data
             is ApiResult.Error -> throw result.exception
         }

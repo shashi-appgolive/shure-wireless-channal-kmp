@@ -2,6 +2,7 @@ package com.shure.wireless.channels.devices.data
 
 import com.shure.wireless.channels.core.common.Logger
 import com.shure.wireless.channels.devices.domain.model.DeviceEvent
+import com.shure.wireless.channels.devices.domain.model.DiscoveredDevicesConnection
 import com.shure.wireless.channels.devices.domain.model.DeviceEventType
 import com.shure.wireless.channels.devices.domain.model.StoredDevice
 import com.shure.wireless.channels.devices.domain.repository.DeviceOperationsRepository
@@ -61,6 +62,13 @@ class DemoDeviceOperationsRepository : DeviceOperationsRepository {
 
     override suspend fun getDeviceModels(address: String): List<String> =
         listOf("ULXD4Q", "AD4Q", "P10T")
+
+    override suspend fun updateName(address: String, deviceId: String, name: String): StoredDevice =
+        StoredDevice(id = deviceId, name = name, lastSeenAtEpochMillis = 1L)
+    override suspend fun updateAudioChannelGain(address: String, channelId: String, gain: Double): Double = gain
+
+    override suspend fun discoverDevicesConnection(address: String): DiscoveredDevicesConnection =
+        DiscoveredDevicesConnection()
 
     override fun listenEvents(): Flow<DeviceEvent> = flow {
         val events = listOf(

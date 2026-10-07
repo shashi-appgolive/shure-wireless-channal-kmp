@@ -10,6 +10,10 @@ import com.shure.wireless.channels.devices.domain.usecase.ConnectDeviceUseCase
 import com.shure.wireless.channels.devices.domain.usecase.DiscoverDevicesUseCase
 import com.shure.wireless.channels.devices.domain.usecase.GetStoredDevicesUseCase
 import com.shure.wireless.channels.devices.domain.usecase.GetDeviceModelsUseCase
+import com.shure.wireless.channels.razorsdk.DefaultRazorSdk
+import com.shure.wireless.channels.razorsdk.RazorSdk
+import com.shure.wireless.channels.core.network.di.WebSocketApiClientQualifier
+import com.shure.wireless.channels.core.network.websocket.WebSocketClient
 import com.shure.wireless.channels.devices.domain.usecase.ObserveStoredDevicesUseCase
 import com.shure.wireless.channels.devices.domain.usecase.ListenDeviceEventsUseCase
 import com.shure.wireless.channels.devices.domain.usecase.SaveStoredDeviceUseCase
@@ -22,6 +26,7 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val storedDevicesModule: Module = module {
+    single<RazorSdk> { DefaultRazorSdk(get(), get<WebSocketClient>(WebSocketApiClientQualifier)) }
     single<StoredDeviceRepository> { RoomStoredDeviceRepository(get()) }
     single {
         DeviceDiscoveryGraphQlApi(
@@ -48,8 +53,7 @@ val storedDevicesModule: Module = module {
             saveStoredDeviceUseCase = get(),
             saveStoredDevicesUseCase = get(),
             connectDeviceUseCase = get(),
-            discoverDevicesUseCase = get(),
-            getDeviceModelsUseCase = get(),
+            razorSdk = get(),
             listenDeviceEventsUseCase = get(),
         )
     }
@@ -61,6 +65,7 @@ val storedDevicesModule: Module = module {
  * SQLiteDriver wired up yet.
  */
 val webStoredDevicesModule: Module = module {
+    single<RazorSdk> { DefaultRazorSdk(get(), get<WebSocketClient>(WebSocketApiClientQualifier)) }
     single<StoredDeviceRepository> { InMemoryStoredDeviceRepository() }
     single {
         DeviceDiscoveryGraphQlApi(
@@ -87,8 +92,7 @@ val webStoredDevicesModule: Module = module {
             saveStoredDeviceUseCase = get(),
             saveStoredDevicesUseCase = get(),
             connectDeviceUseCase = get(),
-            discoverDevicesUseCase = get(),
-            getDeviceModelsUseCase = get(),
+            razorSdk = get(),
             listenDeviceEventsUseCase = get(),
         )
     }

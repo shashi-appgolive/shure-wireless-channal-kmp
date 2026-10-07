@@ -11,7 +11,7 @@ data class NetworkClientConfig(
     val enableLogging: Boolean = false,
     val logger: NetworkLogger = NetworkLogger.None,
     val webSocketPingIntervalMillis: Long? = null,
-    val webSocketMaxFrameSize: Long = Long.MAX_VALUE,
+    val webSocketMaxFrameSize: Long = 16L * 1024L * 1024L,
 ) {
     init {
         require(baseUrl.isNotBlank()) { "baseUrl cannot be blank" }
@@ -54,7 +54,7 @@ data class WebSocketEndpointConfig(
     val baseUrl: String,
     val defaultHeaders: Map<String, String> = emptyMap(),
     val pingIntervalMillis: Long? = null,
-    val maxFrameSize: Long = Long.MAX_VALUE,
+    val maxFrameSize: Long = DEFAULT_MAX_FRAME_SIZE,
     val enableLogging: Boolean = false,
     val logger: NetworkLogger = NetworkLogger.None,
 ) {
@@ -71,6 +71,10 @@ data class WebSocketEndpointConfig(
     }
 
     val normalizedBaseUrl: String = baseUrl.trimEnd('/')
+
+    private companion object {
+        const val DEFAULT_MAX_FRAME_SIZE: Long = 16L * 1024L * 1024L
+    }
 }
 
 fun interface NetworkLogger {

@@ -10,9 +10,8 @@ import com.shure.wireless.channels.core.common.onFailure
 import com.shure.wireless.channels.core.common.onSuccess
 import com.shure.wireless.channels.devices.domain.model.StoredDevice
 import com.shure.wireless.channels.devices.domain.usecase.ConnectDeviceUseCase
-import com.shure.wireless.channels.devices.domain.usecase.DiscoverDevicesUseCase
+import com.shure.wireless.channels.razorsdk.RazorSdk
 import com.shure.wireless.channels.devices.domain.usecase.GetStoredDevicesUseCase
-import com.shure.wireless.channels.devices.domain.usecase.GetDeviceModelsUseCase
 import com.shure.wireless.channels.devices.domain.usecase.ObserveStoredDevicesUseCase
 import com.shure.wireless.channels.devices.domain.usecase.ListenDeviceEventsUseCase
 import com.shure.wireless.channels.devices.domain.usecase.SaveStoredDeviceUseCase
@@ -30,8 +29,7 @@ class DeviceViewModel(
     private val saveStoredDeviceUseCase: SaveStoredDeviceUseCase,
     private val saveStoredDevicesUseCase: SaveStoredDevicesUseCase,
     private val connectDeviceUseCase: ConnectDeviceUseCase,
-    private val discoverDevicesUseCase: DiscoverDevicesUseCase,
-    private val getDeviceModelsUseCase: GetDeviceModelsUseCase,
+    private val razorSdk: RazorSdk,
     private val listenDeviceEventsUseCase: ListenDeviceEventsUseCase,
 ) : ViewModel() {
 
@@ -43,6 +41,9 @@ class DeviceViewModel(
     private var connectJob: Job? = null
     private var discoveryJob: Job? = null
     private var deviceModelsJob: Job? = null
+    private var discoveryConnectionsJob: Job? = null
+    private val meterJobs = mutableMapOf<String, Job>()
+    private val rfMeterJobs = mutableMapOf<String, Job>()
     private var eventsJob: Job? = null
 
     init {
@@ -102,24 +103,15 @@ class DeviceViewModel(
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
             Logger.d(TAG, "Device discovery requested for $endpoint")
-            discoverDevicesUseCase.execute(DISCOVER_DEVICES_USE_CASE, endpoint).collect { operation ->
-                if (operation.isLoading) {
-                    _uiState.update { it.copy(isDiscovering = true, errorMessage = null) }
+            _uiState.update { it.copy(isDiscovering = true, errorMessage = null) }
+            runCatching { razorSdk.devices.discoverConnections(endpoint) }
+                .onSuccess { devices ->
+                    Logger.d(TAG, "Discovery result received: ${devices.devices.size} devices")
+                    _uiState.update { it.copy(discoveredConnections = devices.devices, isDiscovering = false) }
                 }
-                operation.onFailure { failure ->
-                    _uiState.update {
-                        it.copy(
-                            isDiscovering = false,
-                            errorMessage = failure.message ?: DEFAULT_ERROR_MESSAGE,
-                        )
-                    }
+                .onFailure { error ->
+                    _uiState.update { it.copy(isDiscovering = false, errorMessage = error.message ?: DEFAULT_ERROR_MESSAGE) }
                 }
-                operation.data?.let { devices ->
-                    Logger.d(TAG, "Discovery result received; forwarding devices to save use case")
-                    _uiState.update { it.copy(isDiscovering = false) }
-                    persistDevices(devices)
-                }
-            }
         }
     }
 
@@ -132,10 +124,88 @@ class DeviceViewModel(
         deviceModelsJob?.cancel()
         deviceModelsJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoadingDeviceModels = true, errorMessage = null) }
-            runCatching { getDeviceModelsUseCase.execute(endpoint) }
+            runCatching { razorSdk.devices.getDeviceModels(endpoint) }
                 .onSuccess { models -> _uiState.update { it.copy(deviceModels = models, isLoadingDeviceModels = false) } }
                 .onFailure { error -> _uiState.update { it.copy(isLoadingDeviceModels = false, errorMessage = error.message ?: DEFAULT_ERROR_MESSAGE) } }
         }
+    }
+
+    fun discoverDevicesConnection(address: String) {
+        val endpoint = address.trim()
+        if (endpoint.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "GraphQL endpoint cannot be empty.") }
+            return
+        }
+        discoveryConnectionsJob?.cancel()
+        discoveryConnectionsJob = viewModelScope.launch {
+            _uiState.update { it.copy(isDiscoveringConnections = true, errorMessage = null) }
+            runCatching { razorSdk.devices.discoverConnections(endpoint) }
+                .onSuccess { result -> _uiState.update { it.copy(discoveredConnections = result.devices, isDiscoveringConnections = false) } }
+                .onFailure { error -> _uiState.update { it.copy(isDiscoveringConnections = false, errorMessage = error.message ?: DEFAULT_ERROR_MESSAGE) } }
+        }
+    }
+
+    fun startListening(channelId: String) {
+        meterJobs[channelId]?.cancel()
+        meterJobs[channelId] = viewModelScope.launch {
+            _uiState.update { it.copy(listeningChannelIds = it.listeningChannelIds + channelId) }
+            runCatching {
+                razorSdk.audioMeters.observe(channelId).collect { meter ->
+                    _uiState.update { it.copy(audioMeters = it.audioMeters + (channelId to meter)) }
+                }
+            }.onFailure { exception ->
+                _uiState.update { it.copy(listeningChannelIds = it.listeningChannelIds - channelId, errorMessage = exception.message ?: DEFAULT_ERROR_MESSAGE) }
+            }
+        }
+    }
+
+    fun stopListening(channelId: String) {
+        meterJobs.remove(channelId)?.cancel()
+        _uiState.update { it.copy(listeningChannelIds = it.listeningChannelIds - channelId) }
+    }
+
+    fun startRfListening(channelId: String) {
+        rfMeterJobs[channelId]?.cancel()
+        rfMeterJobs[channelId] = viewModelScope.launch {
+            _uiState.update { it.copy(listeningRfChannelIds = it.listeningRfChannelIds + channelId) }
+            runCatching {
+                razorSdk.rfMeters.observe(channelId).collect { meter ->
+                    _uiState.update { it.copy(rfMeters = it.rfMeters + (channelId to meter)) }
+                }
+            }.onFailure { exception ->
+                _uiState.update { it.copy(listeningRfChannelIds = it.listeningRfChannelIds - channelId, errorMessage = exception.message ?: DEFAULT_ERROR_MESSAGE) }
+            }
+        }
+    }
+
+    fun stopRfListening(channelId: String) {
+        rfMeterJobs.remove(channelId)?.cancel()
+        _uiState.update { it.copy(listeningRfChannelIds = it.listeningRfChannelIds - channelId) }
+    }
+
+    fun updateDeviceName(address: String, deviceId: String, name: String) {
+        val trimmedName = name.trim()
+        if (trimmedName.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "Device name cannot be empty.") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isUpdatingDeviceName = true, errorMessage = null) }
+            when (val result = razorSdk.devices.updateName(deviceId, trimmedName, address)) {
+                is com.shure.wireless.channels.razorsdk.SdkResult.Success ->
+                    _uiState.update { it.copy(isUpdatingDeviceName = false) }
+                is com.shure.wireless.channels.razorsdk.SdkResult.Failure ->
+                    _uiState.update { it.copy(isUpdatingDeviceName = false, errorMessage = result.error.toString()) }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        meterJobs.values.forEach(Job::cancel)
+        meterJobs.clear()
+        rfMeterJobs.values.forEach(Job::cancel)
+        rfMeterJobs.clear()
+        super.onCleared()
     }
 
     fun toggleEventListening() {

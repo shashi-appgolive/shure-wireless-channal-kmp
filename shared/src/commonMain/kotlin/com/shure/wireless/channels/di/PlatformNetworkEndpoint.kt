@@ -8,3 +8,6 @@ fun defaultLocalWebSocketBaseUrl(): String = "ws://${defaultLocalHostPort()}"
 
 /** Default GraphQL endpoint used by the reference app. */
 fun defaultGraphQlBaseUrl(): String = "https://helping-scrimmage-bunkmate.ngrok-free.dev/"
+
+fun defaultGraphQlWebSocketBaseUrl(): String =
+    defaultGraphQlBaseUrl().replaceFirst("https://", "wss://")

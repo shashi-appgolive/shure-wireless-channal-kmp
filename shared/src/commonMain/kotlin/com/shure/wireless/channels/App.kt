@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -53,6 +54,7 @@ import com.shure.wireless.channels.di.defaultGraphQlBaseUrl
 import com.shure.wireless.channels.devices.domain.model.DeviceEvent
 import com.shure.wireless.channels.devices.domain.model.DeviceEventType
 import com.shure.wireless.channels.devices.domain.model.StoredDevice
+import com.shure.wireless.channels.devices.domain.model.DiscoveredDevice
 import com.shure.wireless.channels.devices.presentation.DeviceUiState
 import com.shure.wireless.channels.devices.presentation.DeviceViewModel
 import com.shure.wireless.channels.ui.theme.ShureColors
@@ -72,12 +74,13 @@ fun App(viewModel: DeviceViewModel = koinViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     DeviceConsoleScreen(
         state = uiState,
-        onConnect = viewModel::connect,
         onDiscover = viewModel::discoverDevices,
         onGetDeviceModels = viewModel::getDeviceModels,
-        onToggleEvents = viewModel::toggleEventListening,
-        onRefreshDatabase = viewModel::refreshDevices,
-        onClearLogs = viewModel::clearLogs,
+        onStartListening = viewModel::startListening,
+        onStopListening = viewModel::stopListening,
+        onStartRfListening = viewModel::startRfListening,
+        onStopRfListening = viewModel::stopRfListening,
+        onUpdateDeviceName = { deviceId, name -> viewModel.updateDeviceName(defaultGraphQlBaseUrl(), deviceId, name) },
         onClearError = viewModel::clearError,
     )
 }
@@ -85,16 +88,47 @@ fun App(viewModel: DeviceViewModel = koinViewModel()) {
 @Composable
 fun DeviceConsoleScreen(
     state: DeviceUiState,
-    onConnect: (String) -> Unit = {},
     onDiscover: (String) -> Unit = {},
     onGetDeviceModels: (String) -> Unit = {},
-    onToggleEvents: () -> Unit = {},
-    onRefreshDatabase: () -> Unit = {},
-    onClearLogs: () -> Unit = {},
+    onStartListening: (String) -> Unit = {},
+    onStopListening: (String) -> Unit = {},
+    onStartRfListening: (String) -> Unit = {},
+    onStopRfListening: (String) -> Unit = {},
+    onUpdateDeviceName: (String, String) -> Unit = { _, _ -> },
     onClearError: () -> Unit = {},
 ) {
     var address by remember { mutableStateOf(defaultGraphQlBaseUrl()) }
-    var selectedDevice by remember { mutableStateOf<StoredDevice?>(null) }
+    var selectedConnection by remember { mutableStateOf<DiscoveredDevice?>(null) }
+    var showDeviceModels by remember { mutableStateOf(false) }
+    if (showDeviceModels) {
+        ShureTheme {
+            Surface(modifier = Modifier.fillMaxSize(), color = ConsoleBackground) {
+                DeviceModelsScreen(
+                    models = state.deviceModels,
+                    onBack = { showDeviceModels = false },
+                )
+            }
+        }
+        return
+    }
+    if (selectedConnection != null) {
+        ShureTheme {
+            Surface(modifier = Modifier.fillMaxSize(), color = ConsoleBackground) {
+                ConnectionDetailsPanel(
+                    device = requireNotNull(selectedConnection),
+                    state = state,
+                    onStartListening = onStartListening,
+                    onStopListening = onStopListening,
+                    onStartRfListening = onStartRfListening,
+                    onStopRfListening = onStopRfListening,
+                    onUpdateDeviceName = onUpdateDeviceName,
+                    onDismiss = { selectedConnection = null },
+                    fullScreen = true,
+                )
+            }
+        }
+        return
+    }
     ShureTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = ConsoleBackground) {
             LazyColumn(
@@ -110,71 +144,172 @@ fun DeviceConsoleScreen(
                         address = address,
                         onAddressChange = { address = it },
                         state = state,
-                        onConnect = { onConnect(address) },
                         onDiscover = { onDiscover(address) },
                         onGetDeviceModels = { onGetDeviceModels(address) },
-                        onToggleEvents = onToggleEvents,
-                        onRefreshDatabase = onRefreshDatabase,
                     )
                 }
                 state.errorMessage?.let { message -> item { ErrorBanner(message, onClearError) } }
-                item { StatusStrip(state) }
-                item { SectionHeader("DEVICE MODELS", "${state.deviceModels.size} available") }
-                if (state.deviceModels.isEmpty()) {
-                    item { EmptyPanel("Use Get Models to load supported device models.") }
-                } else {
-                    item { Text(state.deviceModels.joinToString(", "), color = MutedText) }
-                }
-                item { SectionHeader("PERSISTED DEVICES", "Room 3 · live query") }
-                if (state.devices.isEmpty()) {
-                    item { EmptyPanel("No devices in Room. Connect or run discovery.") }
-                } else {
-                    items(state.devices, key = { it.id }) { device ->
-                        DeviceRow(
-                            device = device,
-                            isConnected = state.connectedDevice?.id == device.id,
-                            onClick = { selectedDevice = device },
-                        )
-                    }
-                }
-                selectedDevice?.let { device ->
-                    item {
-                        DeviceDetailsPanel(
-                            device = device,
-                            onDismiss = { selectedDevice = null },
-                        )
-                    }
-                }
-                item { SectionHeader("DEVICE EVENTS", if (state.isListening) "stream active" else "stream stopped") }
-                if (state.events.isEmpty()) {
-                    item { EmptyPanel("Start Listen Events to receive simulated device changes.") }
-                } else {
-                    items(state.events.takeLast(6).reversed()) { event ->
-                        DeviceEventRow(event)
-                    }
-                }
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = state.deviceModels.isNotEmpty()) { showDeviceModels = true },
+                        colors = CardDefaults.cardColors(containerColor = ConsoleSurface),
                     ) {
-                        SectionHeader("OPERATION LOG", "${state.logs.size} entries")
-                        OutlinedButton(onClick = onClearLogs) { Text("Clear") }
+                        Column(Modifier.padding(14.dp)) {
+                            Text("DEVICE MODELS", color = ShureGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Text(
+                                if (state.deviceModels.isEmpty()) "Use Get Device Models to load supported models."
+                                else "${state.deviceModels.size} models available · Tap to view",
+                                color = MutedText,
+                            )
+                        }
                     }
                 }
-                if (state.logs.isEmpty()) {
-                    item { EmptyPanel("Operation logs will appear here.") }
+                item { SectionHeader("DISCOVERED CONNECTIONS", "${state.discoveredConnections.size} devices") }
+                if (state.discoveredConnections.isEmpty()) {
+                    item { EmptyPanel("Use Discover Connections to load detailed device capabilities.") }
                 } else {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            state.logs.takeLast(60).forEach { entry -> LogRow(entry) }
+                    itemsIndexed(state.discoveredConnections, key = { index, device -> "${device.id}-$index" }) { _, device ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedConnection = device },
+                            colors = CardDefaults.cardColors(containerColor = ConsoleSurface),
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(
+                                    device.features.name ?: device.interfaceInfo?.model ?: device.id,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    "${device.status ?: "Unknown"} · ${device.features.audioChannels.size} audio · ${device.features.rfChannels.size} RF",
+                                    color = MutedText,
+                                )
+                            }
                         }
                     }
                 }
                 item { Spacer(Modifier.height(20.dp)) }
             }
         }
+    }
+}
+
+@Composable
+private fun DeviceModelsScreen(
+    models: List<String>,
+    onBack: () -> Unit,
+) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical))
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("DEVICE MODELS", color = ShureGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            OutlinedButton(onClick = onBack) { Text("Back") }
+        }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(models, key = { it }) { model ->
+                Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = ConsoleSurface)) {
+                    Text(model, Modifier.padding(14.dp), color = Color.White, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ConnectionDetailsPanel(
+    device: DiscoveredDevice,
+    state: DeviceUiState,
+    onStartListening: (String) -> Unit,
+    onStopListening: (String) -> Unit,
+    onStartRfListening: (String) -> Unit,
+    onStopRfListening: (String) -> Unit,
+    onUpdateDeviceName: (String, String) -> Unit,
+    onDismiss: () -> Unit,
+    fullScreen: Boolean = false,
+) {
+    var isEditingName by remember { mutableStateOf(false) }
+    var editedName by remember(device.id) { mutableStateOf(device.features.name ?: device.interfaceInfo?.model.orEmpty()) }
+    val content: @Composable () -> Unit = {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("DEVICE DETAILS", color = ShureGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!isEditingName) {
+                    OutlinedButton(onClick = { isEditingName = true }) { Text("Edit") }
+                }
+                OutlinedButton(onClick = onDismiss) { Text(if (fullScreen) "Back" else "Close") }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        if (isEditingName) {
+            OutlinedTextField(
+                value = editedName,
+                onValueChange = { editedName = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Device name") },
+                singleLine = true,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onUpdateDeviceName(device.id, editedName); isEditingName = false }) { Text("Save") }
+                OutlinedButton(onClick = { isEditingName = false }) { Text("Cancel") }
+            }
+        } else {
+            Text(device.features.name ?: device.interfaceInfo?.model ?: device.id, color = Color.White, fontWeight = FontWeight.Bold)
+        }
+        Text("${device.interfaceInfo?.category ?: "Unknown"} · ${device.status ?: "Unknown"}", color = MutedText)
+        Spacer(Modifier.height(12.dp))
+        Text("AUDIO CHANNELS", color = ShureGreen, fontWeight = FontWeight.Bold)
+        device.features.audioChannels.forEachIndexed { index, channel ->
+            val meter = state.audioMeters[channel.id]
+            val isListening = channel.id in state.listeningChannelIds
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${index + 1}. ${channel.features.name ?: channel.id}", color = Color.White)
+                    Text("Gain: ${channel.features.gain ?: "—"} · Peak: ${meter?.peakLevel ?: "—"} · RMS: ${meter?.rmsLevel ?: "—"}", color = MutedText)
+                }
+                OutlinedButton(onClick = { if (isListening) onStopListening(channel.id) else onStartListening(channel.id) }) {
+                    Text(if (isListening) "Stop" else "Listen")
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Text("RF CHANNELS", color = ShureGreen, fontWeight = FontWeight.Bold)
+        device.features.rfChannels.forEachIndexed { index, channel ->
+            val meter = state.rfMeters[channel.id]
+            val isListening = channel.id in state.listeningRfChannelIds
+            val antennaA = meter?.antennas?.firstOrNull { it.antenna == "ANTENNA_A" }?.level
+            val antennaB = meter?.antennas?.firstOrNull { it.antenna == "ANTENNA_B" }?.level
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("${device.features.serialNumber ?: "RF Channel ${index + 1}"}", color = Color.White)
+                    Text("A_A: ${antennaA ?: "—"} · A_B: ${antennaB ?: "—"}", color = MutedText)
+                }
+                OutlinedButton(onClick = { if (isListening) onStopRfListening(channel.id) else onStartRfListening(channel.id) }) {
+                    Text(if (isListening) "Stop" else "Listen")
+                }
+            }
+        }
+    }
+    if (fullScreen) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical))
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+        ) { content() }
+    } else {
+        ConsoleCard { content() }
     }
 }
 
@@ -188,7 +323,7 @@ private fun ConsoleHeader(state: DeviceUiState) {
         Column(Modifier.weight(1f)) {
             Text("SHURE", color = ShureGreen, fontWeight = FontWeight.Black, letterSpacing = 3.sp)
             Text("Wireless Operations Console", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text("KMP API and persistence demonstration", color = MutedText)
+            Text("Razor SDK reference application", color = MutedText)
         }
         StatusPill(state.connectedDevice?.let { "CONNECTED" } ?: "READY", state.connectedDevice != null)
     }
@@ -199,11 +334,8 @@ private fun ActionPanel(
     address: String,
     onAddressChange: (String) -> Unit,
     state: DeviceUiState,
-    onConnect: () -> Unit,
     onDiscover: () -> Unit,
     onGetDeviceModels: () -> Unit,
-    onToggleEvents: () -> Unit,
-    onRefreshDatabase: () -> Unit,
 ) {
     ConsoleCard {
         Text("OPERATIONS", color = ShureGreen, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
@@ -216,22 +348,13 @@ private fun ActionPanel(
             singleLine = true,
         )
         Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OperationButton(
-                text = if (state.isConnecting) "Connecting…" else "Connect",
-                loading = state.isConnecting,
-                enabled = !state.isConnecting,
-                onClick = onConnect,
-                modifier = Modifier.weight(1f),
-            )
-            OperationButton(
-                text = if (state.isDiscovering) "Discovering…" else "Discover",
-                loading = state.isDiscovering,
-                enabled = !state.isDiscovering,
-                onClick = onDiscover,
-                modifier = Modifier.weight(1f),
-            )
-        }
+        OperationButton(
+            text = if (state.isDiscovering) "Discovering…" else "Discover Devices",
+            loading = state.isDiscovering,
+            enabled = !state.isDiscovering,
+            onClick = onDiscover,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.height(10.dp))
         OperationButton(
             text = if (state.isLoadingDeviceModels) "Loading Models…" else "Get Device Models",
@@ -241,14 +364,6 @@ private fun ActionPanel(
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onToggleEvents, modifier = Modifier.weight(1f)) {
-                Text(if (state.isListening) "Stop Events" else "Listen Events")
-            }
-            OutlinedButton(onClick = onRefreshDatabase, modifier = Modifier.weight(1f)) {
-                Text(if (state.isLoading) "Reading Room…" else "Read Database")
-            }
-        }
     }
 }
 

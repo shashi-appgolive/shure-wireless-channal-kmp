@@ -119,7 +119,6 @@ internal fun createWebSocketHttpClient(config: WebSocketEndpointConfig): HttpCli
     return createPlatformHttpClient {
         install(WebSockets) {
             config.pingIntervalMillis?.let { pingIntervalMillis = it }
-            maxFrameSize = config.maxFrameSize
             contentConverter = KotlinxWebsocketSerializationConverter(json)
         }
 
