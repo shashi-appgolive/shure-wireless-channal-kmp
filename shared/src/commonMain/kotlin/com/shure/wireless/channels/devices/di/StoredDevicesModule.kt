@@ -9,6 +9,7 @@ import com.shure.wireless.channels.devices.domain.repository.StoredDeviceReposit
 import com.shure.wireless.channels.devices.domain.usecase.ConnectDeviceUseCase
 import com.shure.wireless.channels.devices.domain.usecase.DiscoverDevicesUseCase
 import com.shure.wireless.channels.devices.domain.usecase.GetStoredDevicesUseCase
+import com.shure.wireless.channels.devices.domain.usecase.GetDeviceModelsUseCase
 import com.shure.wireless.channels.devices.domain.usecase.ObserveStoredDevicesUseCase
 import com.shure.wireless.channels.devices.domain.usecase.ListenDeviceEventsUseCase
 import com.shure.wireless.channels.devices.domain.usecase.SaveStoredDeviceUseCase
@@ -34,6 +35,7 @@ val storedDevicesModule: Module = module {
     }
     factory { ConnectDeviceUseCase(get()) }
     factory { DiscoverDevicesUseCase(get()) }
+    factory { GetDeviceModelsUseCase(get()) }
     factory { GetStoredDevicesUseCase(get()) }
     factory { ListenDeviceEventsUseCase(get()) }
     factory { ObserveStoredDevicesUseCase(get()) }
@@ -47,6 +49,7 @@ val storedDevicesModule: Module = module {
             saveStoredDevicesUseCase = get(),
             connectDeviceUseCase = get(),
             discoverDevicesUseCase = get(),
+            getDeviceModelsUseCase = get(),
             listenDeviceEventsUseCase = get(),
         )
     }
@@ -71,6 +74,7 @@ val webStoredDevicesModule: Module = module {
     }
     factory { ConnectDeviceUseCase(get()) }
     factory { DiscoverDevicesUseCase(get()) }
+    factory { GetDeviceModelsUseCase(get()) }
     factory { GetStoredDevicesUseCase(get()) }
     factory { ListenDeviceEventsUseCase(get()) }
     factory { ObserveStoredDevicesUseCase(get()) }
@@ -84,6 +88,7 @@ val webStoredDevicesModule: Module = module {
             saveStoredDevicesUseCase = get(),
             connectDeviceUseCase = get(),
             discoverDevicesUseCase = get(),
+            getDeviceModelsUseCase = get(),
             listenDeviceEventsUseCase = get(),
         )
     }

@@ -9,5 +9,7 @@ interface DeviceOperationsRepository {
 
     suspend fun discoverDevices(address: String): List<StoredDevice>
 
+    suspend fun getDeviceModels(address: String): List<String>
+
     fun listenEvents(): Flow<DeviceEvent>
 }

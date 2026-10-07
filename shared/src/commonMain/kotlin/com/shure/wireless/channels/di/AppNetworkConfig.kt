@@ -12,7 +12,7 @@ object AppNetworkEndpoints {
 
 fun defaultAppNetworkConfig(): NetworkModuleConfig {
     val restBaseUrl = defaultLocalHttpBaseUrl()
-    val graphQlBaseUrl = defaultLocalHttpBaseUrl()
+    val graphQlBaseUrl = defaultGraphQlBaseUrl()
     val webSocketBaseUrl = defaultLocalWebSocketBaseUrl()
     Logger.d(
         TAG,

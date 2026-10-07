@@ -59,6 +59,9 @@ class DemoDeviceOperationsRepository : DeviceOperationsRepository {
         ).also { Logger.i(TAG, "Discovery returned ${it.size} devices") }
     }
 
+    override suspend fun getDeviceModels(address: String): List<String> =
+        listOf("ULXD4Q", "AD4Q", "P10T")
+
     override fun listenEvents(): Flow<DeviceEvent> = flow {
         val events = listOf(
             DeviceEvent("demo-ulxd4-20", DeviceEventType.SIGNAL_CHANGED, "RF level changed to -48 dBm"),

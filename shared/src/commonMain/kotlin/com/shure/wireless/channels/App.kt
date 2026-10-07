@@ -49,7 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shure.wireless.channels.core.common.LogEntry
 import com.shure.wireless.channels.core.common.LogLevel
-import com.shure.wireless.channels.di.defaultLocalHostPort
+import com.shure.wireless.channels.di.defaultGraphQlBaseUrl
 import com.shure.wireless.channels.devices.domain.model.DeviceEvent
 import com.shure.wireless.channels.devices.domain.model.DeviceEventType
 import com.shure.wireless.channels.devices.domain.model.StoredDevice
@@ -74,6 +74,7 @@ fun App(viewModel: DeviceViewModel = koinViewModel()) {
         state = uiState,
         onConnect = viewModel::connect,
         onDiscover = viewModel::discoverDevices,
+        onGetDeviceModels = viewModel::getDeviceModels,
         onToggleEvents = viewModel::toggleEventListening,
         onRefreshDatabase = viewModel::refreshDevices,
         onClearLogs = viewModel::clearLogs,
@@ -86,12 +87,13 @@ fun DeviceConsoleScreen(
     state: DeviceUiState,
     onConnect: (String) -> Unit = {},
     onDiscover: (String) -> Unit = {},
+    onGetDeviceModels: (String) -> Unit = {},
     onToggleEvents: () -> Unit = {},
     onRefreshDatabase: () -> Unit = {},
     onClearLogs: () -> Unit = {},
     onClearError: () -> Unit = {},
 ) {
-    var address by remember { mutableStateOf(defaultLocalHostPort()) }
+    var address by remember { mutableStateOf(defaultGraphQlBaseUrl()) }
     var selectedDevice by remember { mutableStateOf<StoredDevice?>(null) }
     ShureTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = ConsoleBackground) {
@@ -110,12 +112,19 @@ fun DeviceConsoleScreen(
                         state = state,
                         onConnect = { onConnect(address) },
                         onDiscover = { onDiscover(address) },
+                        onGetDeviceModels = { onGetDeviceModels(address) },
                         onToggleEvents = onToggleEvents,
                         onRefreshDatabase = onRefreshDatabase,
                     )
                 }
                 state.errorMessage?.let { message -> item { ErrorBanner(message, onClearError) } }
                 item { StatusStrip(state) }
+                item { SectionHeader("DEVICE MODELS", "${state.deviceModels.size} available") }
+                if (state.deviceModels.isEmpty()) {
+                    item { EmptyPanel("Use Get Models to load supported device models.") }
+                } else {
+                    item { Text(state.deviceModels.joinToString(", "), color = MutedText) }
+                }
                 item { SectionHeader("PERSISTED DEVICES", "Room 3 · live query") }
                 if (state.devices.isEmpty()) {
                     item { EmptyPanel("No devices in Room. Connect or run discovery.") }
@@ -192,6 +201,7 @@ private fun ActionPanel(
     state: DeviceUiState,
     onConnect: () -> Unit,
     onDiscover: () -> Unit,
+    onGetDeviceModels: () -> Unit,
     onToggleEvents: () -> Unit,
     onRefreshDatabase: () -> Unit,
 ) {
@@ -222,6 +232,14 @@ private fun ActionPanel(
                 modifier = Modifier.weight(1f),
             )
         }
+        Spacer(Modifier.height(10.dp))
+        OperationButton(
+            text = if (state.isLoadingDeviceModels) "Loading Models…" else "Get Device Models",
+            loading = state.isLoadingDeviceModels,
+            enabled = !state.isLoadingDeviceModels,
+            onClick = onGetDeviceModels,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onToggleEvents, modifier = Modifier.weight(1f)) {

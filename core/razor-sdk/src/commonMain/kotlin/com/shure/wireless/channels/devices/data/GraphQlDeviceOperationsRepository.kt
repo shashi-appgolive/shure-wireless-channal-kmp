@@ -28,6 +28,14 @@ class GraphQlDeviceOperationsRepository(
         return executeDiscoverDevices(endpoint)
     }
 
+    override suspend fun getDeviceModels(address: String): List<String> {
+        val endpoint = address.toGraphQlEndpoint()
+        return when (val result = discoveryApi.getDeviceModels(endpoint)) {
+            is ApiResult.Success -> result.data
+            is ApiResult.Error -> throw result.exception
+        }
+    }
+
     private suspend fun executeDiscoverDevices(endpointOverride: String? = null): List<StoredDevice> {
         return when (val result = discoveryApi.discoverDevices(endpointOverride)) {
             is ApiResult.Success -> {

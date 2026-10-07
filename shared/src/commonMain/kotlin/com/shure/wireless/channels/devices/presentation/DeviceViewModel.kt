@@ -12,6 +12,7 @@ import com.shure.wireless.channels.devices.domain.model.StoredDevice
 import com.shure.wireless.channels.devices.domain.usecase.ConnectDeviceUseCase
 import com.shure.wireless.channels.devices.domain.usecase.DiscoverDevicesUseCase
 import com.shure.wireless.channels.devices.domain.usecase.GetStoredDevicesUseCase
+import com.shure.wireless.channels.devices.domain.usecase.GetDeviceModelsUseCase
 import com.shure.wireless.channels.devices.domain.usecase.ObserveStoredDevicesUseCase
 import com.shure.wireless.channels.devices.domain.usecase.ListenDeviceEventsUseCase
 import com.shure.wireless.channels.devices.domain.usecase.SaveStoredDeviceUseCase
@@ -30,6 +31,7 @@ class DeviceViewModel(
     private val saveStoredDevicesUseCase: SaveStoredDevicesUseCase,
     private val connectDeviceUseCase: ConnectDeviceUseCase,
     private val discoverDevicesUseCase: DiscoverDevicesUseCase,
+    private val getDeviceModelsUseCase: GetDeviceModelsUseCase,
     private val listenDeviceEventsUseCase: ListenDeviceEventsUseCase,
 ) : ViewModel() {
 
@@ -40,6 +42,7 @@ class DeviceViewModel(
     private var saveJob: Job? = null
     private var connectJob: Job? = null
     private var discoveryJob: Job? = null
+    private var deviceModelsJob: Job? = null
     private var eventsJob: Job? = null
 
     init {
@@ -117,6 +120,21 @@ class DeviceViewModel(
                     persistDevices(devices)
                 }
             }
+        }
+    }
+
+    fun getDeviceModels(address: String) {
+        val endpoint = address.trim()
+        if (endpoint.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "GraphQL endpoint cannot be empty.") }
+            return
+        }
+        deviceModelsJob?.cancel()
+        deviceModelsJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingDeviceModels = true, errorMessage = null) }
+            runCatching { getDeviceModelsUseCase.execute(endpoint) }
+                .onSuccess { models -> _uiState.update { it.copy(deviceModels = models, isLoadingDeviceModels = false) } }
+                .onFailure { error -> _uiState.update { it.copy(isLoadingDeviceModels = false, errorMessage = error.message ?: DEFAULT_ERROR_MESSAGE) } }
         }
     }
 

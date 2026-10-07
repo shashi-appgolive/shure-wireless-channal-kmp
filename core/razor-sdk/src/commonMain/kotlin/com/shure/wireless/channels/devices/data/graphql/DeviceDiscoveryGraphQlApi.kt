@@ -22,6 +22,19 @@ class DeviceDiscoveryGraphQlApi(
         return result
     }
 
+    internal suspend fun getDeviceModels(endpointOverride: String? = null): ApiResult<List<String>> {
+        val endpoint = endpointOverride ?: graphQlClient.endpoint
+        Logger.d(TAG, "Sending DeviceModelsQuery to $endpoint")
+        return when (val result = graphQlClient.executeData<DeviceModelsData>(
+            query = DeviceModelsQuery,
+            operationName = DeviceModelsOperationName,
+            endpoint = endpoint,
+        )) {
+            is ApiResult.Success -> ApiResult.Success(result.data.deviceModels, result.statusCode)
+            is ApiResult.Error -> result
+        }
+    }
+
     private companion object {
         const val TAG = "DeviceDiscoveryGraphQlApi"
     }
