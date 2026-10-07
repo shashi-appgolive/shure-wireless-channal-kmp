@@ -4,7 +4,7 @@ import Shared
 @main
 struct iOSApp: App {
     init() {
-        KoinBootstrapKt.startChannelsPersistence()
+        KoinBootstrapKt.startChannelsAppGraph()
     }
 
     var body: some Scene {

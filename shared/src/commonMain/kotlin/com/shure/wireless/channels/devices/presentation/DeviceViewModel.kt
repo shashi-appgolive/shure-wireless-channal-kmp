@@ -57,10 +57,17 @@ class DeviceViewModel(
     }
 
     fun connect(address: String) {
+        val endpoint = address.trim()
+        if (endpoint.isBlank()) {
+            Logger.w(TAG, "Connect blocked because endpoint is empty")
+            _uiState.update { it.copy(errorMessage = "GraphQL endpoint cannot be empty.") }
+            return
+        }
+
         connectJob?.cancel()
         connectJob = viewModelScope.launch {
-            Logger.d(TAG, "Connect requested for $address")
-            connectDeviceUseCase.execute(CONNECT_DEVICE_USE_CASE, address).collect { operation ->
+            Logger.d(TAG, "Connect requested for $endpoint")
+            connectDeviceUseCase.execute(CONNECT_DEVICE_USE_CASE, endpoint).collect { operation ->
                 if (operation.isLoading) {
                     _uiState.update { it.copy(isConnecting = true, errorMessage = null) }
                 }
@@ -81,11 +88,18 @@ class DeviceViewModel(
         }
     }
 
-    fun discoverDevices() {
+    fun discoverDevices(address: String) {
+        val endpoint = address.trim()
+        if (endpoint.isBlank()) {
+            Logger.w(TAG, "Discovery blocked because endpoint is empty")
+            _uiState.update { it.copy(errorMessage = "GraphQL endpoint cannot be empty.") }
+            return
+        }
+
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
-            Logger.d(TAG, "Device discovery requested")
-            discoverDevicesUseCase.execute(DISCOVER_DEVICES_USE_CASE).collect { operation ->
+            Logger.d(TAG, "Device discovery requested for $endpoint")
+            discoverDevicesUseCase.execute(DISCOVER_DEVICES_USE_CASE, endpoint).collect { operation ->
                 if (operation.isLoading) {
                     _uiState.update { it.copy(isDiscovering = true, errorMessage = null) }
                 }

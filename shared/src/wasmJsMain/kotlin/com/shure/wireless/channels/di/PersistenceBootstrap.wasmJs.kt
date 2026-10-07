@@ -10,7 +10,7 @@ import org.koin.core.KoinApplication
  * Starts browser persistence with the SQLite worker-backed driver owned by the web application.
  */
 fun initializeWebPersistence(driver: SQLiteDriver): KoinApplication =
-    ChannelsKoin.startPersistence(
+    ChannelsKoin.startWithPersistence(
         ChannelsPersistenceConfig(
             dataStoreFactory = createDataStoreFactory(),
             databaseFactory = createDatabaseFactory(driver),

@@ -2,6 +2,7 @@ package com.shure.wireless.channels
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shure.wireless.channels.core.common.LogEntry
 import com.shure.wireless.channels.core.common.LogLevel
+import com.shure.wireless.channels.di.defaultLocalHostPort
 import com.shure.wireless.channels.devices.domain.model.DeviceEvent
 import com.shure.wireless.channels.devices.domain.model.DeviceEventType
 import com.shure.wireless.channels.devices.domain.model.StoredDevice
@@ -83,13 +85,14 @@ fun App(viewModel: DeviceViewModel = koinViewModel()) {
 fun DeviceConsoleScreen(
     state: DeviceUiState,
     onConnect: (String) -> Unit = {},
-    onDiscover: () -> Unit = {},
+    onDiscover: (String) -> Unit = {},
     onToggleEvents: () -> Unit = {},
     onRefreshDatabase: () -> Unit = {},
     onClearLogs: () -> Unit = {},
     onClearError: () -> Unit = {},
 ) {
-    var address by remember { mutableStateOf("192.168.1.20") }
+    var address by remember { mutableStateOf(defaultLocalHostPort()) }
+    var selectedDevice by remember { mutableStateOf<StoredDevice?>(null) }
     ShureTheme {
         Surface(modifier = Modifier.fillMaxSize(), color = ConsoleBackground) {
             LazyColumn(
@@ -106,7 +109,7 @@ fun DeviceConsoleScreen(
                         onAddressChange = { address = it },
                         state = state,
                         onConnect = { onConnect(address) },
-                        onDiscover = onDiscover,
+                        onDiscover = { onDiscover(address) },
                         onToggleEvents = onToggleEvents,
                         onRefreshDatabase = onRefreshDatabase,
                     )
@@ -118,7 +121,19 @@ fun DeviceConsoleScreen(
                     item { EmptyPanel("No devices in Room. Connect or run discovery.") }
                 } else {
                     items(state.devices, key = { it.id }) { device ->
-                        DeviceRow(device, isConnected = state.connectedDevice?.id == device.id)
+                        DeviceRow(
+                            device = device,
+                            isConnected = state.connectedDevice?.id == device.id,
+                            onClick = { selectedDevice = device },
+                        )
+                    }
+                }
+                selectedDevice?.let { device ->
+                    item {
+                        DeviceDetailsPanel(
+                            device = device,
+                            onDismiss = { selectedDevice = null },
+                        )
                     }
                 }
                 item { SectionHeader("DEVICE EVENTS", if (state.isListening) "stream active" else "stream stopped") }
@@ -262,17 +277,67 @@ private fun MetricCard(label: String, value: String, detail: String, modifier: M
 }
 
 @Composable
-private fun DeviceRow(device: StoredDevice, isConnected: Boolean) {
+private fun DeviceRow(
+    device: StoredDevice,
+    isConnected: Boolean,
+    onClick: () -> Unit,
+) {
     ConsoleCard {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             Column(Modifier.weight(1f)) {
                 Text(device.name, fontWeight = FontWeight.Bold)
                 Text("${device.model ?: "Unknown model"} · ${device.ipAddress ?: "No IP"}", color = MutedText)
-                Text("Firmware ${device.firmwareVersion ?: "—"} · persisted in Room", color = MutedText, fontSize = 12.sp)
+                Text(device.deviceDetailText(), color = MutedText, fontSize = 12.sp)
             }
             StatusPill(if (isConnected) "LIVE" else "SAVED", isConnected)
         }
     }
+}
+
+@Composable
+private fun DeviceDetailsPanel(
+    device: StoredDevice,
+    onDismiss: () -> Unit,
+) {
+    ConsoleCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SectionHeader("DEVICE DETAILS", device.name)
+            OutlinedButton(onClick = onDismiss) { Text("Close") }
+        }
+        Spacer(Modifier.height(10.dp))
+        DeviceDetailLine("ID", device.id)
+        DeviceDetailLine("Hardware ID", device.hardwareId ?: "-")
+        DeviceDetailLine("Status", device.status ?: "-")
+        DeviceDetailLine("Model", device.model ?: "-")
+        DeviceDetailLine("Category", device.category ?: "-")
+        DeviceDetailLine("IP Address", device.ipAddress ?: "-")
+        DeviceDetailLine("Firmware", device.firmwareVersion ?: "-")
+        DeviceDetailLine("Last Seen", device.lastSeenAtEpochMillis.toString())
+    }
+}
+
+@Composable
+private fun DeviceDetailLine(label: String, value: String) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(label, color = MutedText, fontSize = 10.sp, letterSpacing = 1.sp)
+        Text(value, color = Color.White, fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+    }
+}
+
+private fun StoredDevice.deviceDetailText(): String {
+    val apiDetails = listOfNotNull(status, category, hardwareId).takeIf { it.isNotEmpty() }
+    if (apiDetails != null) return apiDetails.joinToString(" · ")
+
+    return "Firmware ${firmwareVersion ?: "-"} · persisted in Room"
 }
 
 @Composable
@@ -385,7 +450,16 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
 private fun DeviceConsolePreview() {
     DeviceConsoleScreen(
         state = DeviceUiState(
-            devices = listOf(StoredDevice("demo", "Stage Receiver A", "ULXD4Q", "192.168.1.20", "2.8.1", 1L)),
+            devices = listOf(
+                StoredDevice(
+                    id = "demo",
+                    name = "Stage Receiver A",
+                    model = "ULXD4Q",
+                    ipAddress = "192.168.1.20",
+                    firmwareVersion = "2.8.1",
+                    lastSeenAtEpochMillis = 1L,
+                ),
+            ),
             events = listOf(DeviceEvent("demo", DeviceEventType.SIGNAL_CHANGED, "RF level changed to -48 dBm")),
             logs = listOf(
                 LogEntry(1, LogLevel.DEBUG, "DeviceViewModel", "Connect requested for 192.168.1.20"),

@@ -9,7 +9,7 @@ import com.shure.wireless.channels.core.database.entity.StoredDeviceEntity
 
 @Database(
     entities = [StoredDeviceEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 @ConstructedBy(ChannelsDatabaseConstructor::class)

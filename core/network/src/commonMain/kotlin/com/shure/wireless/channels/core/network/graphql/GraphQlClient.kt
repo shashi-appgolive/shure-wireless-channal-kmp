@@ -25,6 +25,7 @@ class GraphQlClient(
         variables: Variables,
         operationName: String? = null,
         headers: Map<String, String> = emptyMap(),
+        endpoint: String = this.endpoint,
     ): ApiResult<GraphQlResponse<Data>> = safeNetworkCall {
         val response = httpClient.post(endpoint) {
             headers.forEach { (name, value) -> header(name, value) }
@@ -49,11 +50,13 @@ class GraphQlClient(
         query: String,
         operationName: String? = null,
         headers: Map<String, String> = emptyMap(),
+        endpoint: String = this.endpoint,
     ): ApiResult<GraphQlResponse<Data>> = execute(
         query = query,
         variables = buildJsonObject { },
         operationName = operationName,
         headers = headers,
+        endpoint = endpoint,
     )
 
     suspend inline fun <reified Data, reified Variables> executeData(
@@ -61,8 +64,9 @@ class GraphQlClient(
         variables: Variables,
         operationName: String? = null,
         headers: Map<String, String> = emptyMap(),
+        endpoint: String = this.endpoint,
     ): ApiResult<Data> = when (
-        val result = execute<Data, Variables>(query, variables, operationName, headers)
+        val result = execute<Data, Variables>(query, variables, operationName, headers, endpoint)
     ) {
         is ApiResult.Error -> result
         is ApiResult.Success -> {
@@ -100,10 +104,12 @@ class GraphQlClient(
         query: String,
         operationName: String? = null,
         headers: Map<String, String> = emptyMap(),
+        endpoint: String = this.endpoint,
     ): ApiResult<Data> = executeData<Data, JsonObject>(
         query = query,
         variables = buildJsonObject { },
         operationName = operationName,
         headers = headers,
+        endpoint = endpoint,
     )
 }

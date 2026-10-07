@@ -1,8 +1,9 @@
 package com.shure.wireless.channels.devices.di
 
-import com.shure.wireless.channels.devices.data.DemoDeviceOperationsRepository
+import com.shure.wireless.channels.devices.data.GraphQlDeviceOperationsRepository
 import com.shure.wireless.channels.devices.data.InMemoryStoredDeviceRepository
 import com.shure.wireless.channels.devices.data.RoomStoredDeviceRepository
+import com.shure.wireless.channels.devices.data.graphql.DeviceDiscoveryGraphQlApi
 import com.shure.wireless.channels.devices.domain.repository.DeviceOperationsRepository
 import com.shure.wireless.channels.devices.domain.repository.StoredDeviceRepository
 import com.shure.wireless.channels.devices.domain.usecase.ConnectDeviceUseCase
@@ -13,13 +14,24 @@ import com.shure.wireless.channels.devices.domain.usecase.ListenDeviceEventsUseC
 import com.shure.wireless.channels.devices.domain.usecase.SaveStoredDeviceUseCase
 import com.shure.wireless.channels.devices.domain.usecase.SaveStoredDevicesUseCase
 import com.shure.wireless.channels.devices.presentation.DeviceViewModel
+import com.shure.wireless.channels.core.network.di.GraphQlApiClientQualifier
+import com.shure.wireless.channels.core.network.graphql.GraphQlClient
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val storedDevicesModule: Module = module {
     single<StoredDeviceRepository> { RoomStoredDeviceRepository(get()) }
-    single<DeviceOperationsRepository> { DemoDeviceOperationsRepository() }
+    single {
+        DeviceDiscoveryGraphQlApi(
+            graphQlClient = get<GraphQlClient>(GraphQlApiClientQualifier),
+        )
+    }
+    single<DeviceOperationsRepository> {
+        GraphQlDeviceOperationsRepository(
+            discoveryApi = get(),
+        )
+    }
     factory { ConnectDeviceUseCase(get()) }
     factory { DiscoverDevicesUseCase(get()) }
     factory { GetStoredDevicesUseCase(get()) }
@@ -47,7 +59,16 @@ val storedDevicesModule: Module = module {
  */
 val webStoredDevicesModule: Module = module {
     single<StoredDeviceRepository> { InMemoryStoredDeviceRepository() }
-    single<DeviceOperationsRepository> { DemoDeviceOperationsRepository() }
+    single {
+        DeviceDiscoveryGraphQlApi(
+            graphQlClient = get<GraphQlClient>(GraphQlApiClientQualifier),
+        )
+    }
+    single<DeviceOperationsRepository> {
+        GraphQlDeviceOperationsRepository(
+            discoveryApi = get(),
+        )
+    }
     factory { ConnectDeviceUseCase(get()) }
     factory { DiscoverDevicesUseCase(get()) }
     factory { GetStoredDevicesUseCase(get()) }

@@ -1,8 +1,12 @@
 package com.shure.wireless.channels
 
-import com.shure.wireless.channels.di.initializeIosPersistence
+import com.shure.wireless.channels.di.initializeIosAppGraph
 
-/** Stable Swift-facing entry point for initializing the shared persistence graph. */
+/** Stable Swift-facing entry point for initializing the shared app graph. */
 fun startChannelsPersistence() {
-    initializeIosPersistence()
+    startChannelsAppGraph()
+}
+
+fun startChannelsAppGraph() {
+    initializeIosAppGraph()
 }

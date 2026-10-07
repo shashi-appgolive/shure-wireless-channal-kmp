@@ -28,13 +28,34 @@ class DemoDeviceOperationsRepository : DeviceOperationsRepository {
         ).also { Logger.i(TAG, "Connected to ${it.name} at $address") }
     }
 
-    override suspend fun discoverDevices(): List<StoredDevice> {
-        Logger.d(TAG, "Scanning the demo network")
+    override suspend fun discoverDevices(address: String): List<StoredDevice> {
+        Logger.d(TAG, "Scanning the demo network at $address")
         delay(1_000)
         return listOf(
-            StoredDevice("demo-ulxd4-20", "Stage Receiver A", "ULXD4Q", "192.168.1.20", "2.8.1", 2L),
-            StoredDevice("demo-axient-21", "Lead Vocal", "AD4Q", "192.168.1.21", "1.4.7", 3L),
-            StoredDevice("demo-psm-22", "Monitor Rack", "P10T", "192.168.1.22", "1.7.3", 4L),
+            StoredDevice(
+                id = "demo-ulxd4-20",
+                name = "Stage Receiver A",
+                model = "ULXD4Q",
+                ipAddress = "192.168.1.20",
+                firmwareVersion = "2.8.1",
+                lastSeenAtEpochMillis = 2L,
+            ),
+            StoredDevice(
+                id = "demo-axient-21",
+                name = "Lead Vocal",
+                model = "AD4Q",
+                ipAddress = "192.168.1.21",
+                firmwareVersion = "1.4.7",
+                lastSeenAtEpochMillis = 3L,
+            ),
+            StoredDevice(
+                id = "demo-psm-22",
+                name = "Monitor Rack",
+                model = "P10T",
+                ipAddress = "192.168.1.22",
+                firmwareVersion = "1.7.3",
+                lastSeenAtEpochMillis = 4L,
+            ),
         ).also { Logger.i(TAG, "Discovery returned ${it.size} devices") }
     }
 

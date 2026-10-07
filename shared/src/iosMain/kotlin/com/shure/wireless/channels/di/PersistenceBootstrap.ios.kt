@@ -6,7 +6,11 @@ import com.shure.wireless.channels.core.datastore.createDataStoreFactory
 
 /** Called by the Swift application before the first Compose screen is created. */
 fun initializeIosPersistence() {
-    ChannelsKoin.startPersistence(
+    initializeIosAppGraph()
+}
+
+fun initializeIosAppGraph() {
+    ChannelsKoin.startWithPersistence(
         ChannelsPersistenceConfig(
             dataStoreFactory = createDataStoreFactory(),
             databaseFactory = createDatabaseFactory(),

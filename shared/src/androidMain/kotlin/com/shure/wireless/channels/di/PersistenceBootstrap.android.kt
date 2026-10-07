@@ -7,7 +7,10 @@ import com.shure.wireless.channels.core.datastore.createDataStoreFactory
 import org.koin.core.KoinApplication
 
 fun initializeAndroidPersistence(context: Context): KoinApplication =
-    ChannelsKoin.startPersistence(
+    initializeAndroidAppGraph(context)
+
+fun initializeAndroidAppGraph(context: Context): KoinApplication =
+    ChannelsKoin.startWithPersistence(
         ChannelsPersistenceConfig(
             dataStoreFactory = context.createDataStoreFactory(),
             databaseFactory = context.createDatabaseFactory(),

@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.Flow
 interface DeviceOperationsRepository {
     suspend fun connect(address: String): StoredDevice
 
-    suspend fun discoverDevices(): List<StoredDevice>
+    suspend fun discoverDevices(address: String): List<StoredDevice>
 
     fun listenEvents(): Flow<DeviceEvent>
 }

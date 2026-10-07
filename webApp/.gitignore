@@ -1,0 +1,6 @@
+/build/
+/.gradle/
+node_modules/
+kotlin-js-store/
+.kotlin/
+.DS_Store

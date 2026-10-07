@@ -20,7 +20,7 @@ class NetworkModuleTest {
                 networkModule(
                     NetworkModuleConfig(
                         rest = NetworkEndpointConfig("https://rest.example.test/"),
-                        graphQl = NetworkEndpointConfig("https://graphql.example.test/graphql/"),
+                        graphQl = NetworkEndpointConfig("http://127.0.0.1:11000"),
                         webSocket = WebSocketEndpointConfig("wss://events.example.test/socket/"),
                     ),
                 ),

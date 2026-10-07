@@ -1,7 +1,7 @@
 package com.shure.wireless.channels.devices.domain.usecase
 
 import com.shure.wireless.channels.core.common.Completed
-import com.shure.wireless.channels.core.common.FlowUseCase2
+import com.shure.wireless.channels.core.common.FlowUseCase3
 import com.shure.wireless.channels.core.common.Logger
 import com.shure.wireless.channels.core.common.success
 import com.shure.wireless.channels.devices.domain.model.StoredDevice
@@ -9,10 +9,10 @@ import com.shure.wireless.channels.devices.domain.repository.DeviceOperationsRep
 
 class DiscoverDevicesUseCase(
     private val repository: DeviceOperationsRepository,
-) : FlowUseCase2<List<StoredDevice>>() {
-    override suspend fun executeInternal(): Completed<List<StoredDevice>> {
+) : FlowUseCase3<List<StoredDevice>, String>() {
+    override suspend fun executeInternal(params: String): Completed<List<StoredDevice>> {
         Logger.d(TAG, "Delegating discovery to repository")
-        return success(repository.discoverDevices())
+        return success(repository.discoverDevices(params.trim()))
     }
 
     private companion object {
