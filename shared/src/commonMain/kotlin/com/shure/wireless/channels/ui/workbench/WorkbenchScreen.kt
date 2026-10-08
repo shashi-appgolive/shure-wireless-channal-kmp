@@ -15,6 +15,8 @@ import androidx.compose.ui.window.DialogProperties
 import com.shure.wireless.channels.devices.domain.model.DiscoveredDevice
 import com.shure.wireless.channels.devices.presentation.DeviceUiState
 import com.shure.wireless.channels.ui.components.ErrorBanner
+import com.shure.wireless.channels.ui.components.AdaptiveWorkbenchLayout
+import com.shure.wireless.channels.ui.components.WorkbenchInventoryHeader
 import com.shure.wireless.channels.ui.theme.ShureTheme
 import com.shure.wireless.channels.di.defaultGraphQlBaseUrl
 
@@ -23,13 +25,31 @@ fun WorkbenchScreen(state: DeviceUiState, actions: WorkbenchActions) {
     var address by remember { mutableStateOf(defaultGraphQlBaseUrl()) }
     var draftAddress by remember { mutableStateOf(address) }
     var showEndpointEditor by remember { mutableStateOf(false) }
-    var selectedChannel by remember { mutableStateOf<Pair<DiscoveredDevice, Int>?>(null) }
+    var selectedChannel by remember { mutableStateOf<Pair<String, Int>?>(null) }
 
     LaunchedEffect(address) { actions.discover(address) }
 
+    DisposableEffect(state.discoveredConnections) {
+        val audioIds = state.discoveredConnections.flatMap { it.features.audioChannels.map { channel -> channel.id } }
+        val rfIds = state.discoveredConnections.flatMap { it.features.rfChannels.map { channel -> channel.id } }
+        audioIds.forEach(actions.startAudioListening)
+        rfIds.forEach(actions.startRfListening)
+        onDispose {
+            audioIds.forEach(actions.stopAudioListening)
+            rfIds.forEach(actions.stopRfListening)
+        }
+    }
+
     if (selectedChannel != null) {
-        val (device, channelIndex) = requireNotNull(selectedChannel)
-        ShureTheme {
+        val (deviceId, channelIndex) = requireNotNull(selectedChannel)
+        val device = state.discoveredConnections.firstOrNull { it.id == deviceId }
+        if (device == null) {
+            selectedChannel = null
+            return
+        }
+        @Composable
+        fun DetailsPane() {
+            key(device.id, channelIndex) {
             DeviceDetailsScreen(
                 device = device,
                 channelIndex = channelIndex,
@@ -50,19 +70,28 @@ fun WorkbenchScreen(state: DeviceUiState, actions: WorkbenchActions) {
                 accentColor = WorkbenchGreen,
                 mutedColor = WorkbenchMutedText,
             )
+            }
+        }
+        ShureTheme {
+            AdaptiveWorkbenchLayout(
+                backgroundColor = WorkbenchBackground,
+                listContent = {
+                    Column(
+                        Modifier
+                            .fillMaxSize()
+                            .windowInsetsPadding(WindowInsets.safeDrawing),
+                    ) {
+                        WorkbenchInventoryHeader(
+                            onEdit = { draftAddress = address; showEndpointEditor = true },
+                            onRefresh = { actions.discover(address) },
+                        )
+                        WorkbenchDeviceList(state.discoveredConnections, state.audioMeters, state.rfMeters, actions.meterProgress, WorkbenchMutedText, WorkbenchGreen) { selectedDevice, selectedIndex -> selectedChannel = selectedDevice.id to selectedIndex }
+                    }
+                },
+                detailsContent = { DetailsPane() },
+            )
         }
         return
-    }
-
-    DisposableEffect(state.discoveredConnections) {
-        val audioIds = state.discoveredConnections.flatMap { it.features.audioChannels.map { channel -> channel.id } }
-        val rfIds = state.discoveredConnections.flatMap { it.features.rfChannels.map { channel -> channel.id } }
-        audioIds.forEach(actions.startAudioListening)
-        rfIds.forEach(actions.startRfListening)
-        onDispose {
-            audioIds.forEach(actions.stopAudioListening)
-            rfIds.forEach(actions.stopRfListening)
-        }
     }
 
     ShureTheme {
@@ -76,7 +105,7 @@ fun WorkbenchScreen(state: DeviceUiState, actions: WorkbenchActions) {
                     }
                 }
                 if (state.discoveredConnections.isNotEmpty()) {
-                    WorkbenchDeviceList(state.discoveredConnections, state.audioMeters, state.rfMeters, actions.meterProgress, WorkbenchMutedText, WorkbenchGreen) { device, index -> selectedChannel = device to index }
+                    WorkbenchDeviceList(state.discoveredConnections, state.audioMeters, state.rfMeters, actions.meterProgress, WorkbenchMutedText, WorkbenchGreen) { device, index -> selectedChannel = device.id to index }
                 } else {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 28.dp)) {
                         Text("Device Discovery", color = WorkbenchGreen, fontSize = 22.sp, fontWeight = FontWeight.Bold)

@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -21,12 +24,17 @@ private val MeterGreen = Color(0xFF9CFF00)
 
 @Composable
 fun AudioMeter(progress: Float) {
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 180),
+        label = "audio-meter-progress",
+    )
     BoxWithConstraints(
         Modifier.fillMaxWidth().height(ShureDimens.MeterHeight).background(MeterTrack, RoundedCornerShape(8.dp)),
     ) {
         val widthPx = with(LocalDensity.current) { maxWidth.toPx() }
         Box(
-            Modifier.fillMaxWidth(progress).height(ShureDimens.MeterHeight).background(
+            Modifier.fillMaxWidth(animatedProgress).height(ShureDimens.MeterHeight).background(
                 Brush.horizontalGradient(
                     colors = listOf(MeterGreen, Color(0xFFFFD54F), Color(0xFFE85D5D)),
                     startX = 0f,
@@ -41,8 +49,13 @@ fun AudioMeter(progress: Float) {
 @Composable
 fun TinyRfMeter(level: Double?, modifier: Modifier = Modifier) {
     val progress = level?.let { ((it + 90.0) / 90.0).coerceIn(0.0, 1.0).toFloat() } ?: 0f
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        animationSpec = tween(durationMillis = 180),
+        label = "rf-meter-progress",
+    )
     Box(modifier.height(ShureDimens.TinyMeterHeight).background(RfTrack, RoundedCornerShape(8.dp))) {
-        Box(Modifier.fillMaxWidth(progress).height(ShureDimens.TinyMeterHeight).background(MeterGreen, RoundedCornerShape(8.dp)))
+        Box(Modifier.fillMaxWidth(animatedProgress).height(ShureDimens.TinyMeterHeight).background(MeterGreen, RoundedCornerShape(8.dp)))
     }
 }
 

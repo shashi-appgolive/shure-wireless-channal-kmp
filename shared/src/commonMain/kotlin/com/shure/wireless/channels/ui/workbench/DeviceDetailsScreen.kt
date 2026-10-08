@@ -40,6 +40,14 @@ fun DeviceDetailsScreen(
     var displayDeviceName by remember { mutableStateOf(details.deviceName) }
     var gainInput by remember { mutableStateOf((audioChannel?.features?.gain ?: 0.0).toInt()) }
 
+    LaunchedEffect(device.id, details.deviceName) {
+        displayDeviceName = details.deviceName
+        nameInput = details.deviceName
+    }
+    LaunchedEffect(audioChannel?.id, audioChannel?.features?.gain) {
+        gainInput = (audioChannel?.features?.gain ?: 0.0).toInt()
+    }
+
     DisposableEffect(audioChannel?.id) {
         audioChannel?.id?.let(actions.startAudioListening)
         onDispose { audioChannel?.id?.let(actions.stopAudioListening) }

@@ -57,13 +57,11 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.shure.wireless.channels.core.common.LogEntry
 import com.shure.wireless.channels.core.common.LogLevel
-import com.shure.wireless.channels.di.defaultGraphQlBaseUrl
 import com.shure.wireless.channels.devices.domain.model.DeviceEvent
 import com.shure.wireless.channels.devices.domain.model.DeviceEventType
 import com.shure.wireless.channels.devices.domain.model.StoredDevice

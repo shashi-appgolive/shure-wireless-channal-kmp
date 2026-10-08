@@ -20,6 +20,7 @@ import com.shure.wireless.channels.devices.domain.model.RfMeterChange
 import com.shure.wireless.channels.ui.components.WorkbenchChannelRow
 import com.shure.wireless.channels.ui.components.WorkbenchInventorySearch
 import com.shure.wireless.channels.ui.components.WorkbenchInventorySummary
+import com.shure.wireless.channels.ui.theme.ShureDimens
 
 @Composable
 fun WorkbenchDeviceList(
@@ -36,13 +37,13 @@ fun WorkbenchDeviceList(
     val totalChannels = filteredDevices.sumOf { it.toWorkbenchChannels().size }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(horizontal = ShureDimens.SmallPadding, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         item { WorkbenchInventorySummary(filteredDevices.size, devices.size, totalChannels) }
         item { WorkbenchInventorySearch(searchQuery) { searchQuery = it } }
         items(filteredDevices, key = { it.id }) { device ->
-            androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 device.toWorkbenchChannels().forEach { channel ->
                     WorkbenchChannelRow(
                         device = device,
