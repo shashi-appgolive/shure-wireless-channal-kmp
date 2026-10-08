@@ -79,7 +79,7 @@ internal fun AudioChannelPanel(
     Column(Modifier.fillMaxWidth().background(DetailSurface).padding(horizontal = 20.dp, vertical = 20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("A", Modifier.width(22.dp), color = ShureColors.TextMuted, fontSize = 12.sp)
-            DetailMeterBar(audioProgress, Modifier.weight(1f), height = 5.dp)
+            AudioMeter(audioProgress, Modifier.weight(1f), height = 5.dp)
         }
         Spacer(Modifier.height(20.dp))
         DetailDivider()

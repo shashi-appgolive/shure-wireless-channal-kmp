@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shure.wireless.channels.devices.presentation.DeviceUiState
+import com.shure.wireless.channels.ui.components.AdaptiveWorkbenchLayout
 import com.shure.wireless.channels.ui.theme.ShureColors
 import com.shure.wireless.channels.ui.theme.ShureTheme
 
@@ -49,29 +50,9 @@ internal fun InventoryScreen(
     onClearError: () -> Unit,
 ) {
     val selectedDevice = state.discoveredConnections.firstOrNull { it.id == state.inventory.selectedDeviceId }
-    if (selectedDevice != null) {
-        ShureTheme {
-            ChannelDetailScreen(
-                device = selectedDevice,
-                channelIndex = state.inventory.selectedChannelIndex,
-                audioMeters = state.audioMeters,
-                rfMeters = state.rfMeters,
-                meterProgress = meterProgress,
-                onUpdateDeviceName = onUpdateDeviceName,
-                onUpdateAudioGain = onUpdateAudioGain,
-                isUpdatingAudioGain = state.isUpdatingAudioGain,
-                errorMessage = state.errorMessage,
-                onClearError = onClearError,
-                onRefresh = onDiscover,
-                onBack = onCloseChannel,
-            )
-        }
-        return
-    }
-
     var draftAddress by remember { mutableStateOf("") }
     var showEndpointEditor by remember { mutableStateOf(false) }
-    ShureTheme {
+    val inventoryPane: @Composable () -> Unit = {
         Surface(Modifier.fillMaxSize(), color = Color.Black) {
             Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
                 InventoryToolbar(
@@ -119,6 +100,32 @@ internal fun InventoryScreen(
                     }
                 }
             }
+        }
+    }
+    ShureTheme {
+        if (selectedDevice != null) {
+            AdaptiveWorkbenchLayout(
+                backgroundColor = Color.Black,
+                listContent = inventoryPane,
+                detailsContent = {
+                    ChannelDetailScreen(
+                        device = selectedDevice,
+                        channelIndex = state.inventory.selectedChannelIndex,
+                        audioMeters = state.audioMeters,
+                        rfMeters = state.rfMeters,
+                        meterProgress = meterProgress,
+                        onUpdateDeviceName = onUpdateDeviceName,
+                        onUpdateAudioGain = onUpdateAudioGain,
+                        isUpdatingAudioGain = state.isUpdatingAudioGain,
+                        errorMessage = state.errorMessage,
+                        onClearError = onClearError,
+                        onRefresh = onDiscover,
+                        onBack = onCloseChannel,
+                    )
+                },
+            )
+        } else {
+            inventoryPane()
         }
         if (showEndpointEditor) {
             AlertDialog(
