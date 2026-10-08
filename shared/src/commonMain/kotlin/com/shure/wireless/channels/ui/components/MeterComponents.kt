@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -26,7 +27,7 @@ private val MeterGreen = Color(0xFF9CFF00)
 fun AudioMeter(progress: Float) {
     val animatedProgress by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
-        animationSpec = tween(durationMillis = 180),
+        animationSpec = tween(durationMillis = 80, easing = LinearEasing),
         label = "audio-meter-progress",
     )
     BoxWithConstraints(
@@ -51,7 +52,7 @@ fun TinyRfMeter(level: Double?, modifier: Modifier = Modifier) {
     val progress = level?.let { ((it + 90.0) / 90.0).coerceIn(0.0, 1.0).toFloat() } ?: 0f
     val animatedProgress by animateFloatAsState(
         targetValue = progress,
-        animationSpec = tween(durationMillis = 180),
+        animationSpec = tween(durationMillis = 80, easing = LinearEasing),
         label = "rf-meter-progress",
     )
     Box(modifier.height(ShureDimens.TinyMeterHeight).background(RfTrack, RoundedCornerShape(8.dp))) {

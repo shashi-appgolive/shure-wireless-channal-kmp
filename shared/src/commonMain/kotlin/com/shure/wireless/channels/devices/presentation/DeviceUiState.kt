@@ -8,6 +8,8 @@ import com.shure.wireless.channels.devices.domain.model.RfMeterChange
 import com.shure.wireless.channels.devices.domain.model.StoredDevice
 
 data class DeviceUiState(
+    val inventory: InventoryUiState = InventoryUiState(),
+    val isSplashVisible: Boolean = true,
     val devices: List<StoredDevice> = emptyList(),
     val deviceModels: List<String> = emptyList(),
     val discoveredConnections: List<DiscoveredDevice> = emptyList(),

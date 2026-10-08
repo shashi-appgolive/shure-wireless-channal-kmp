@@ -16,7 +16,10 @@ import com.shure.wireless.channels.devices.domain.usecase.ObserveStoredDevicesUs
 import com.shure.wireless.channels.devices.domain.usecase.ListenDeviceEventsUseCase
 import com.shure.wireless.channels.devices.domain.usecase.SaveStoredDeviceUseCase
 import com.shure.wireless.channels.devices.domain.usecase.SaveStoredDevicesUseCase
+import com.shure.wireless.channels.di.defaultGraphQlBaseUrl
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,7 +39,7 @@ class DeviceViewModel(
     fun audioMeterProgress(rmsValue: Double, deviceModel: String): Float =
         razorSdk.audioMeters.rmsProgress(rmsValue, deviceModel)
 
-    private val _uiState = MutableStateFlow(DeviceUiState(isLoading = true))
+    private val _uiState = MutableStateFlow(DeviceUiState(isLoading = true, inventory = InventoryUiState(endpoint = defaultGraphQlBaseUrl())))
     val uiState: StateFlow<DeviceUiState> = _uiState.asStateFlow()
 
     private var refreshJob: Job? = null
@@ -53,6 +56,60 @@ class DeviceViewModel(
         Logger.d(TAG, "DeviceViewModel initialized")
         observeLogs()
         observeDevices()
+        discoverDevices(_uiState.value.inventory.endpoint)
+        viewModelScope.launch {
+            delay(SPLASH_DURATION_MILLIS)
+            _uiState.update { it.copy(isSplashVisible = false) }
+        }
+    }
+
+    fun refreshInventory() = discoverDevices(_uiState.value.inventory.endpoint)
+
+    fun setInventoryEndpoint(address: String) {
+        val endpoint = address.trim()
+        if (endpoint.isBlank()) {
+            _uiState.update { it.copy(errorMessage = "GraphQL endpoint cannot be empty.") }
+            return
+        }
+        if (endpoint != _uiState.value.inventory.endpoint) {
+            discoveryJob?.cancel()
+            stopInventoryMeters()
+            _uiState.update {
+                it.copy(
+                    inventory = it.inventory.copy(endpoint = endpoint, selectedDeviceId = null).withDevices(emptyList()),
+                    discoveredConnections = emptyList(),
+                    audioMeters = emptyMap(),
+                    rfMeters = emptyMap(),
+                    errorMessage = null,
+                )
+            }
+        }
+        refreshInventory()
+    }
+
+    fun setInventorySearch(query: String) {
+        _uiState.update { it.copy(inventory = it.inventory.copy(searchQuery = query).withDevices(it.discoveredConnections)) }
+    }
+
+    fun toggleInventoryOnlineFilter() {
+        _uiState.update { it.copy(inventory = it.inventory.copy(onlineOnly = !it.inventory.onlineOnly).withDevices(it.discoveredConnections)) }
+    }
+
+    fun toggleInventorySortOrder() {
+        _uiState.update { it.copy(inventory = it.inventory.copy(sortAscending = !it.inventory.sortAscending).withDevices(it.discoveredConnections)) }
+    }
+
+    fun selectInventoryChannel(deviceId: String, channelIndex: Int) {
+        _uiState.update { it.copy(inventory = it.inventory.copy(selectedDeviceId = deviceId, selectedChannelIndex = channelIndex)) }
+    }
+
+    fun closeInventoryChannel() {
+        _uiState.update { it.copy(inventory = it.inventory.copy(selectedDeviceId = null)) }
+    }
+
+    private fun stopInventoryMeters() {
+        meterJobs.keys.toList().forEach(::stopListening)
+        rfMeterJobs.keys.toList().forEach(::stopRfListening)
     }
 
     private fun observeLogs() {
@@ -110,9 +167,22 @@ class DeviceViewModel(
             runCatching { razorSdk.devices.discoverConnections(endpoint) }
                 .onSuccess { devices ->
                     Logger.d(TAG, "Discovery result received: ${devices.devices.size} devices")
-                    _uiState.update { it.copy(discoveredConnections = devices.devices, isDiscovering = false) }
+                    stopInventoryMeters()
+                    _uiState.update { state ->
+                        state.copy(
+                            discoveredConnections = devices.devices,
+                            inventory = state.inventory.copy(
+                                selectedDeviceId = state.inventory.selectedDeviceId?.takeIf { id -> devices.devices.any { it.id == id } },
+                            ).withDevices(devices.devices),
+                            isDiscovering = false,
+                            errorMessage = null,
+                        )
+                    }
+                    devices.devices.flatMap { it.features.audioChannels }.map { it.id }.distinct().forEach(::startListening)
+                    devices.devices.flatMap { it.features.rfChannels }.map { it.id }.distinct().forEach(::startRfListening)
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     _uiState.update { it.copy(isDiscovering = false, errorMessage = error.message ?: DEFAULT_ERROR_MESSAGE) }
                 }
         }
@@ -197,15 +267,13 @@ class DeviceViewModel(
             when (val result = razorSdk.devices.updateName(deviceId, trimmedName, address)) {
                 is com.shure.wireless.channels.razorsdk.SdkResult.Success ->
                     _uiState.update { state ->
+                        val updated = state.discoveredConnections.map { device ->
+                            if (device.id == deviceId) device.copy(features = device.features.copy(name = trimmedName)) else device
+                        }
                         state.copy(
                             isUpdatingDeviceName = false,
-                            discoveredConnections = state.discoveredConnections.map { device ->
-                                if (device.id == deviceId) {
-                                    device.copy(features = device.features.copy(name = trimmedName))
-                                } else {
-                                    device
-                                }
-                            },
+                            discoveredConnections = updated,
+                            inventory = state.inventory.withDevices(updated),
                         )
                     }
                 is com.shure.wireless.channels.razorsdk.SdkResult.Failure ->
@@ -386,6 +454,7 @@ class DeviceViewModel(
         const val SAVE_DEVICES_USE_CASE = "SaveStoredDevicesUseCase"
         const val EVENT_TAG = "DeviceEvent"
         const val MAX_EVENTS = 20
+        const val SPLASH_DURATION_MILLIS = 1500L
         const val DEFAULT_ERROR_MESSAGE = "Something went wrong. Please try again."
     }
 }

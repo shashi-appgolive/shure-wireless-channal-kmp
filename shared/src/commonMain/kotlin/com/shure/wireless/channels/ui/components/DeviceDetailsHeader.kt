@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -25,7 +26,7 @@ fun DeviceDetailsHeader(
         Modifier.fillMaxWidth().background(surfaceColor).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onBack) { Text("‹", color = accentColor, fontSize = 38.sp) }
+        IconButton(onClick = onBack) { Icon(BackArrowIcon, contentDescription = "Back", tint = accentColor) }
         Text(channelName, color = androidx.compose.ui.graphics.Color.White, fontSize = 22.sp, modifier = Modifier.weight(1f))
         IconButton(onClick = onEdit) { Text("✎", color = accentColor, fontSize = 24.sp) }
         IconButton(onClick = onRefresh) { Text("↻", color = accentColor, fontSize = 24.sp) }
