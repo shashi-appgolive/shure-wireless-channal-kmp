@@ -50,6 +50,8 @@ class DeviceViewModel(
     private var discoveryConnectionsJob: Job? = null
     private val meterJobs = mutableMapOf<String, Job>()
     private val rfMeterJobs = mutableMapOf<String, Job>()
+    private val audioListenerCounts = mutableMapOf<String, Int>()
+    private val rfListenerCounts = mutableMapOf<String, Int>()
     private var eventsJob: Job? = null
 
     init {
@@ -219,7 +221,8 @@ class DeviceViewModel(
     }
 
     fun startListening(channelId: String) {
-        meterJobs[channelId]?.cancel()
+        audioListenerCounts[channelId] = (audioListenerCounts[channelId] ?: 0) + 1
+        if (meterJobs[channelId]?.isActive == true) return
         meterJobs[channelId] = viewModelScope.launch {
             _uiState.update { it.copy(listeningChannelIds = it.listeningChannelIds + channelId) }
             runCatching {
@@ -233,12 +236,19 @@ class DeviceViewModel(
     }
 
     fun stopListening(channelId: String) {
+        val remaining = (audioListenerCounts[channelId] ?: 0) - 1
+        if (remaining > 0) {
+            audioListenerCounts[channelId] = remaining
+            return
+        }
+        audioListenerCounts.remove(channelId)
         meterJobs.remove(channelId)?.cancel()
         _uiState.update { it.copy(listeningChannelIds = it.listeningChannelIds - channelId) }
     }
 
     fun startRfListening(channelId: String) {
-        rfMeterJobs[channelId]?.cancel()
+        rfListenerCounts[channelId] = (rfListenerCounts[channelId] ?: 0) + 1
+        if (rfMeterJobs[channelId]?.isActive == true) return
         rfMeterJobs[channelId] = viewModelScope.launch {
             _uiState.update { it.copy(listeningRfChannelIds = it.listeningRfChannelIds + channelId) }
             runCatching {
@@ -252,6 +262,12 @@ class DeviceViewModel(
     }
 
     fun stopRfListening(channelId: String) {
+        val remaining = (rfListenerCounts[channelId] ?: 0) - 1
+        if (remaining > 0) {
+            rfListenerCounts[channelId] = remaining
+            return
+        }
+        rfListenerCounts.remove(channelId)
         rfMeterJobs.remove(channelId)?.cancel()
         _uiState.update { it.copy(listeningRfChannelIds = it.listeningRfChannelIds - channelId) }
     }
@@ -299,8 +315,10 @@ class DeviceViewModel(
     override fun onCleared() {
         meterJobs.values.forEach(Job::cancel)
         meterJobs.clear()
+        audioListenerCounts.clear()
         rfMeterJobs.values.forEach(Job::cancel)
         rfMeterJobs.clear()
+        rfListenerCounts.clear()
         super.onCleared()
     }
 
