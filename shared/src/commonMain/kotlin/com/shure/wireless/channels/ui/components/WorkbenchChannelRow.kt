@@ -27,6 +27,7 @@ import com.shure.wireless.channels.devices.domain.model.AudioMeterChange
 import com.shure.wireless.channels.devices.domain.model.DiscoveredDevice
 import com.shure.wireless.channels.devices.domain.model.RfMeterChange
 import com.shure.wireless.channels.ui.workbench.WorkbenchChannelUiModel
+import com.shure.wireless.channels.ui.theme.ShureDimens
 
 @Composable
 fun WorkbenchChannelRow(
@@ -40,10 +41,10 @@ fun WorkbenchChannelRow(
     onClick: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).background(Color(0xFF202124), CircleShape), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(ShureDimens.ChannelNumberSize).background(Color(0xFF202124), CircleShape), contentAlignment = Alignment.Center) {
             Text("${channel.channelIndex + 1}", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
-        Spacer(Modifier.size(10.dp))
+        Spacer(Modifier.size(ShureDimens.SmallSpacing))
         Column(Modifier.weight(1f)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(channel.channelName.take(10) + if (channel.channelName.length > 10) "…" else "", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.weight(1f))

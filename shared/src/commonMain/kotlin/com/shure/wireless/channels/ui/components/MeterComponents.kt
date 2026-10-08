@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import com.shure.wireless.channels.ui.theme.ShureDimens
 
 private val MeterTrack = Color(0xFF252525)
 private val RfTrack = Color(0xFF303030)
@@ -21,11 +22,11 @@ private val MeterGreen = Color(0xFF9CFF00)
 @Composable
 fun AudioMeter(progress: Float) {
     BoxWithConstraints(
-        Modifier.fillMaxWidth().height(5.dp).background(MeterTrack, RoundedCornerShape(8.dp)),
+        Modifier.fillMaxWidth().height(ShureDimens.MeterHeight).background(MeterTrack, RoundedCornerShape(8.dp)),
     ) {
         val widthPx = with(LocalDensity.current) { maxWidth.toPx() }
         Box(
-            Modifier.fillMaxWidth(progress).height(5.dp).background(
+            Modifier.fillMaxWidth(progress).height(ShureDimens.MeterHeight).background(
                 Brush.horizontalGradient(
                     colors = listOf(MeterGreen, Color(0xFFFFD54F), Color(0xFFE85D5D)),
                     startX = 0f,
@@ -40,8 +41,8 @@ fun AudioMeter(progress: Float) {
 @Composable
 fun TinyRfMeter(level: Double?, modifier: Modifier = Modifier) {
     val progress = level?.let { ((it + 90.0) / 90.0).coerceIn(0.0, 1.0).toFloat() } ?: 0f
-    Box(modifier.height(4.dp).background(RfTrack, RoundedCornerShape(8.dp))) {
-        Box(Modifier.fillMaxWidth(progress).height(4.dp).background(MeterGreen, RoundedCornerShape(8.dp)))
+    Box(modifier.height(ShureDimens.TinyMeterHeight).background(RfTrack, RoundedCornerShape(8.dp))) {
+        Box(Modifier.fillMaxWidth(progress).height(ShureDimens.TinyMeterHeight).background(MeterGreen, RoundedCornerShape(8.dp)))
     }
 }
 
