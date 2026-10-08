@@ -5,6 +5,7 @@ import com.shure.wireless.channels.devices.domain.model.DeviceEvent
 import com.shure.wireless.channels.devices.domain.model.StoredDevice
 
 data class DeviceUiState(
+    val inventory: InventoryUiState = InventoryUiState(),
     val devices: List<StoredDevice> = emptyList(),
     val connectedDevice: StoredDevice? = null,
     val events: List<DeviceEvent> = emptyList(),
