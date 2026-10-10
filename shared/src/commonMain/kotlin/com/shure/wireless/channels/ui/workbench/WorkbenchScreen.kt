@@ -56,6 +56,10 @@ fun WorkbenchScreen(state: DeviceUiState, actions: WorkbenchActions) {
                 audioMeters = state.audioMeters,
                 rfMeters = state.rfMeters,
                 meterProgress = actions.meterProgress,
+                isUpdatingDeviceName = state.isUpdatingDeviceName,
+                isUpdatingAudioGain = state.isUpdatingAudioGain,
+                errorMessage = state.errorMessage,
+                onClearError = actions.clearError,
                 actions = DeviceDetailsActions(
                     startAudioListening = actions.startAudioListening,
                     stopAudioListening = actions.stopAudioListening,

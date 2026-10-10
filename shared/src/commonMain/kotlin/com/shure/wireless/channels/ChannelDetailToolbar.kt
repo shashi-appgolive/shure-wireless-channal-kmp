@@ -35,7 +35,7 @@ internal fun ChannelDetailToolbar(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Row(
-        Modifier.fillMaxWidth().background(Color(0xFF14191B)).padding(horizontal = 12.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().background(Color(0xFF14191B)).padding(horizontal = 12.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(onClick = onBack) {

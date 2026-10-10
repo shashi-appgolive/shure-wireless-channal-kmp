@@ -116,6 +116,7 @@ internal fun InventoryScreen(
                         meterProgress = meterProgress,
                         onUpdateDeviceName = onUpdateDeviceName,
                         onUpdateAudioGain = onUpdateAudioGain,
+                        isUpdatingDeviceName = state.isUpdatingDeviceName,
                         isUpdatingAudioGain = state.isUpdatingAudioGain,
                         errorMessage = state.errorMessage,
                         onClearError = onClearError,

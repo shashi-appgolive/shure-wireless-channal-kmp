@@ -34,10 +34,14 @@ internal fun formatWorkbenchFrequency(frequency: Double): String {
 internal fun rfSignalProgress(level: Double?): Float =
     level?.let { ((it + 90.0) / 90.0).coerceIn(0.0, 1.0).toFloat() } ?: 0f
 
-private val RfOverload = Color(0xFFFF4D4F)
+internal val RfOverload = Color(0xFFFF4D4F)
+internal val AudioOverload = Color(0xFFFF4D4F)
+
+internal fun isAudioMeterFull(progress: Float): Boolean = progress >= 0.9f
+internal fun isRfMeterFull(level: Double?): Boolean = level != null && rfSignalProgress(level) >= 0.9f
 
 internal fun inventoryRfMeterColor(level: Double?): Color =
-    if (level != null && rfSignalProgress(level) >= 1f) RfOverload else Color.White
+    if (isRfMeterFull(level)) RfOverload else Color.White
 
 @Composable
 internal fun smoothMeterProgress(progress: Float): Float {
@@ -50,17 +54,19 @@ internal fun smoothMeterProgress(progress: Float): Float {
 }
 
 @Composable
-internal fun TinyRfMeter(level: Double?, modifier: Modifier = Modifier, height: Dp = 4.dp) {
+internal fun TinyRfMeter(level: Double?, modifier: Modifier = Modifier, height: Dp = 4.dp, showBorder: Boolean = true) {
     val progress = smoothMeterProgress(rfSignalProgress(level))
-    val overloaded = level != null && progress >= 1f
+    val overloaded = isRfMeterFull(level)
     val shape = RoundedCornerShape(8.dp)
+    val overloadShape = RoundedCornerShape(4.dp)
+    val trackHeight = height + 6.dp
     Box(
-        modifier.height(height).background(Color(0xFF262626), shape)
-            .then(if (overloaded) Modifier.border(1.dp, RfOverload, shape) else Modifier),
+        modifier.height(trackHeight).background(Color(0xFF262626), shape)
+            .then(if (overloaded && showBorder) Modifier.border(1.dp, RfOverload, overloadShape) else Modifier),
     ) {
         Box(
-            Modifier.fillMaxWidth(progress).height(height)
-                .padding(if (overloaded) 1.dp else 0.dp)
+            Modifier.fillMaxWidth(progress).height(trackHeight)
+                .padding(horizontal = if (overloaded) 3.dp else 0.dp, vertical = 3.dp)
                 .background(inventoryRfMeterColor(level), shape),
         )
     }
@@ -68,25 +74,40 @@ internal fun TinyRfMeter(level: Double?, modifier: Modifier = Modifier, height: 
 
 @Composable
 internal fun RfMeterPair(meter: RfMeterChange?, modifier: Modifier = Modifier.width(104.dp)) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        TinyRfMeter(meter?.antennas?.firstOrNull { it.antenna.endsWith("A") }?.level, Modifier.fillMaxWidth(), height = 4.dp)
-        TinyRfMeter(meter?.antennas?.firstOrNull { it.antenna.endsWith("B") }?.level, Modifier.fillMaxWidth(), height = 4.dp)
+    val antennaA = meter?.antennas?.firstOrNull { it.antenna.endsWith("A") }?.level
+    val antennaB = meter?.antennas?.firstOrNull { it.antenna.endsWith("B") }?.level
+    val overloaded = isRfMeterFull(antennaA) || isRfMeterFull(antennaB)
+    Column(
+        modifier.then(if (overloaded) Modifier.border(1.dp, RfOverload, RoundedCornerShape(4.dp)) else Modifier)
+            .padding(2.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        TinyRfMeter(antennaA, Modifier.fillMaxWidth(), height = 4.dp, showBorder = false)
+        TinyRfMeter(antennaB, Modifier.fillMaxWidth(), height = 4.dp, showBorder = false)
     }
 }
 
 @Composable
 internal fun AudioMeter(progress: Float, modifier: Modifier = Modifier, height: Dp = 5.dp) {
     val animatedProgress = smoothMeterProgress(progress)
-    BoxWithConstraints(modifier.fillMaxWidth().height(height).background(Color(0xFF252525), RoundedCornerShape(8.dp))) {
+    val overloaded = isAudioMeterFull(progress)
+    val shape = RoundedCornerShape(8.dp)
+    val trackHeight = height + 6.dp
+    BoxWithConstraints(
+        modifier.fillMaxWidth().height(trackHeight).background(Color(0xFF252525), shape)
+            .then(if (overloaded) Modifier.border(1.dp, AudioOverload, shape) else Modifier),
+    ) {
         val meterWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
         Box(
-            Modifier.fillMaxWidth(animatedProgress).height(height).background(
+            Modifier.fillMaxWidth(animatedProgress).height(trackHeight)
+                .padding(horizontal = if (overloaded) 3.dp else 0.dp, vertical = 3.dp).background(
                 Brush.horizontalGradient(
-                    colors = listOf(ShureColors.Green, Color(0xFFFFD54F), Color(0xFFE85D5D)),
+                    colors = if (overloaded) listOf(AudioOverload, AudioOverload)
+                    else listOf(ShureColors.Green, Color(0xFFFFD54F), Color(0xFFE85D5D)),
                     startX = 0f,
                     endX = meterWidthPx.coerceAtLeast(1f),
                 ),
-                RoundedCornerShape(8.dp),
+                shape,
             ),
         )
     }

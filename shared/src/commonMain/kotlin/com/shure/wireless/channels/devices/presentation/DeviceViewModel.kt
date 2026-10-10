@@ -280,20 +280,26 @@ class DeviceViewModel(
         }
         viewModelScope.launch {
             _uiState.update { it.copy(isUpdatingDeviceName = true, errorMessage = null) }
-            when (val result = razorSdk.devices.updateName(deviceId, trimmedName, address)) {
-                is com.shure.wireless.channels.razorsdk.SdkResult.Success ->
-                    _uiState.update { state ->
-                        val updated = state.discoveredConnections.map { device ->
-                            if (device.id == deviceId) device.copy(features = device.features.copy(name = trimmedName)) else device
+            try {
+                when (val result = razorSdk.devices.updateName(deviceId, trimmedName, address)) {
+                    is com.shure.wireless.channels.razorsdk.SdkResult.Success ->
+                        _uiState.update { state ->
+                            val updated = state.discoveredConnections.map { device ->
+                                if (device.id == deviceId) device.copy(features = device.features.copy(name = trimmedName)) else device
+                            }
+                            state.copy(
+                                isUpdatingDeviceName = false,
+                                discoveredConnections = updated,
+                                inventory = state.inventory.withDevices(updated),
+                            )
                         }
-                        state.copy(
-                            isUpdatingDeviceName = false,
-                            discoveredConnections = updated,
-                            inventory = state.inventory.withDevices(updated),
-                        )
-                    }
-                is com.shure.wireless.channels.razorsdk.SdkResult.Failure ->
-                    _uiState.update { it.copy(isUpdatingDeviceName = false, errorMessage = result.error.toString()) }
+                    is com.shure.wireless.channels.razorsdk.SdkResult.Failure ->
+                        _uiState.update { it.copy(isUpdatingDeviceName = false, errorMessage = result.error.toString()) }
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _uiState.update { it.copy(isUpdatingDeviceName = false, errorMessage = error.message ?: DEFAULT_ERROR_MESSAGE) }
             }
         }
     }
@@ -303,7 +309,14 @@ class DeviceViewModel(
             _uiState.update { it.copy(isUpdatingAudioGain = true, errorMessage = null) }
             when (val result = razorSdk.devices.updateAudioChannelGain(channelId, gain.toDouble(), address)) {
                 is com.shure.wireless.channels.razorsdk.SdkResult.Success -> {
-                    _uiState.update { it.copy(isUpdatingAudioGain = false) }
+                    _uiState.update { state ->
+                        val updated = state.discoveredConnections.map { device ->
+                            device.copy(features = device.features.copy(audioChannels = device.features.audioChannels.map { channel ->
+                                if (channel.id == channelId) channel.copy(features = channel.features.copy(gain = gain.toDouble())) else channel
+                            }))
+                        }
+                        state.copy(isUpdatingAudioGain = false, discoveredConnections = updated, inventory = state.inventory.withDevices(updated))
+                    }
                 }
                 is com.shure.wireless.channels.razorsdk.SdkResult.Failure -> {
                     _uiState.update { it.copy(isUpdatingAudioGain = false, errorMessage = result.error.toString()) }

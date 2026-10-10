@@ -32,7 +32,12 @@ private fun ChannelDetailPreview() {
             device = device,
             channelIndex = 0,
             audioMeters = mapOf("audio-1" to AudioMeterChange("audio-1", rmsLevel = -12.0)),
-            rfMeters = mapOf("rf-1" to RfMeterChange("rf-1", listOf(RfAntennaLevel("ANTENNA_A", -30.0), RfAntennaLevel("ANTENNA_B", -32.0)))),
+            rfMeters = mapOf(
+                "rf-1" to RfMeterChange(
+                    "rf-1",
+                    listOf(RfAntennaLevel("ANTENNA_A", -30.0), RfAntennaLevel("ANTENNA_B", -32.0))
+                )
+            ),
             meterProgress = { _, _ -> 0.65f },
             onUpdateDeviceName = { _, _ -> },
             onUpdateAudioGain = { _, _ -> },
@@ -41,6 +46,7 @@ private fun ChannelDetailPreview() {
             onClearError = {},
             onRefresh = {},
             onBack = {},
+            isUpdatingDeviceName = TODO(),
         )
     }
 }

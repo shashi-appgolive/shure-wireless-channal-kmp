@@ -1,5 +1,7 @@
 package com.shure.wireless.channels.devices.domain.model
 
+const val RECEIVER_ID_MAX_LENGTH = 7
+
 data class DiscoveredDevicesConnection(val devices: List<DiscoveredDevice> = emptyList())
 
 data class DiscoveredDevice(

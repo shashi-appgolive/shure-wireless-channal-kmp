@@ -10,14 +10,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogProperties
 import com.shure.wireless.channels.devices.domain.model.DiscoveredDevice
 import com.shure.wireless.channels.devices.domain.model.AudioMeterChange
 import com.shure.wireless.channels.devices.domain.model.RfMeterChange
-import com.shure.wireless.channels.ui.components.ErrorBanner
+import com.shure.wireless.channels.devices.domain.model.RECEIVER_ID_MAX_LENGTH
 import com.shure.wireless.channels.ui.components.AudioChannelDetails
+import com.shure.wireless.channels.ui.components.ChannelAudioSettingsScreen
+import com.shure.wireless.channels.ui.components.ChannelRfSettingsScreen
+import com.shure.wireless.channels.ui.components.DeviceConnectionInfo
 import com.shure.wireless.channels.ui.components.DeviceDetailsHeader
 import com.shure.wireless.channels.ui.components.DeviceReceiverInfo
+import com.shure.wireless.channels.ui.components.ReceiverSettingsScreen
 import com.shure.wireless.channels.ui.components.RfChannelDetails
 
 @Composable
@@ -28,6 +31,10 @@ fun DeviceDetailsScreen(
     rfMeters: Map<String, RfMeterChange>,
     meterProgress: (Double, String) -> Float,
     actions: DeviceDetailsActions,
+    isUpdatingDeviceName: Boolean,
+    isUpdatingAudioGain: Boolean,
+    errorMessage: String?,
+    onClearError: () -> Unit,
     surfaceColor: Color,
     accentColor: Color,
     mutedColor: Color,
@@ -39,6 +46,9 @@ fun DeviceDetailsScreen(
     var nameInput by remember { mutableStateOf(details.deviceName) }
     var displayDeviceName by remember { mutableStateOf(details.deviceName) }
     var gainInput by remember { mutableStateOf((audioChannel?.features?.gain ?: 0.0).toInt()) }
+    var showReceiverSettings by remember(device.id, channelIndex) { mutableStateOf(false) }
+    var showAudioSettings by remember(device.id, channelIndex) { mutableStateOf(false) }
+    var showRfSettings by remember(device.id, channelIndex) { mutableStateOf(false) }
 
     LaunchedEffect(device.id, details.deviceName) {
         displayDeviceName = details.deviceName
@@ -57,29 +67,93 @@ fun DeviceDetailsScreen(
         onDispose { rfChannel?.id?.let(actions.stopRfListening) }
     }
 
+    if (showAudioSettings && audioChannel != null) {
+        ChannelAudioSettingsScreen(
+            channel = audioChannel,
+            onBack = { showAudioSettings = false },
+            onUpdateAudioGain = actions.updateAudioGain,
+            isUpdatingAudioGain = isUpdatingAudioGain,
+            errorMessage = errorMessage,
+            onClearError = onClearError,
+            surfaceColor = surfaceColor,
+            mutedColor = mutedColor,
+            accentColor = accentColor,
+        )
+        return
+    }
+
+    if (showRfSettings && rfChannel != null) {
+        ChannelRfSettingsScreen(
+            channel = rfChannel,
+            deviceRfBand = device.features.rfBand,
+            onBack = { showRfSettings = false },
+            surfaceColor = surfaceColor,
+            mutedColor = mutedColor,
+            accentColor = accentColor,
+        )
+        return
+    }
+
+    if (showReceiverSettings) {
+        ReceiverSettingsScreen(
+            device = device,
+            channelIndex = channelIndex,
+            onBack = { showReceiverSettings = false },
+            surfaceColor = surfaceColor,
+            mutedColor = mutedColor,
+            isUpdatingReceiverId = isUpdatingDeviceName,
+            errorMessage = errorMessage,
+            onClearError = onClearError,
+            onUpdateReceiverId = actions.updateDeviceName,
+        )
+        return
+    }
+
     Column(Modifier.fillMaxSize().background(surfaceColor).windowInsetsPadding(WindowInsets.safeDrawing)) {
         DeviceDetailsHeader(details.channelName, surfaceColor, accentColor, actions.back, { nameInput = displayDeviceName; showNameEditor = true }, actions.refresh)
         LazyColumn(contentPadding = PaddingValues(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item { Text(displayDeviceName, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 24.dp)) }
             item { Text("ALERTS (0)", color = mutedColor, modifier = Modifier.padding(horizontal = 24.dp)) }
             item { Text("CHANNEL RADIO FREQUENCY", color = mutedColor, modifier = Modifier.padding(horizontal = 24.dp)) }
-            rfChannel?.let { channel -> item { RfChannelDetails(channel, rfMeters[channel.id], details.rfBand, surfaceColor, mutedColor) } }
+            rfChannel?.let { channel ->
+                item {
+                    RfChannelDetails(
+                        channel,
+                        rfMeters[channel.id],
+                        details.rfBand,
+                        surfaceColor,
+                        mutedColor,
+                        onRfSettingsClick = { showRfSettings = true },
+                    )
+                }
+            }
             item { Text("CHANNEL AUDIO", color = mutedColor, modifier = Modifier.padding(horizontal = 24.dp)) }
             audioChannel?.let { channel ->
                 item {
-                    AudioChannelDetails(channel, audioMeters[channel.id]?.rmsLevel, gainInput, { meterProgress(it, details.receiverModel) }, surfaceColor, accentColor, { gainInput -= 1; actions.updateAudioGain(channel.id, gainInput) }, { gainInput += 1; actions.updateAudioGain(channel.id, gainInput) })
+                    AudioChannelDetails(channel, audioMeters[channel.id]?.rmsLevel, gainInput, { meterProgress(it, details.receiverModel) }, surfaceColor, accentColor, { gainInput -= 1; actions.updateAudioGain(channel.id, gainInput) }, { gainInput += 1; actions.updateAudioGain(channel.id, gainInput) }, onAudioSettingsClick = { showAudioSettings = true })
                 }
             }
+            item { Text("DEVICE CONNECTION", color = mutedColor, modifier = Modifier.padding(horizontal = 24.dp)) }
+            item { DeviceConnectionInfo(surfaceColor, mutedColor) }
             item { Text("RECEIVER", color = mutedColor, modifier = Modifier.padding(horizontal = 24.dp)) }
-            item { DeviceReceiverInfo(details, displayDeviceName, surfaceColor) }
+            item {
+                DeviceReceiverInfo(
+                    receiverName = displayDeviceName,
+                    receiverModel = details.receiverModel,
+                    channelNumber = channelIndex + 1,
+                    surfaceColor = surfaceColor,
+                    mutedColor = mutedColor,
+                    onAllSettingsClick = { showReceiverSettings = true },
+                )
+            }
         }
     }
     if (showNameEditor) {
         AlertDialog(
             onDismissRequest = { showNameEditor = false },
             title = { Text("Update device name") },
-            text = { OutlinedTextField(nameInput, { nameInput = it }, label = { Text("Device name") }, singleLine = true) },
-            confirmButton = { Button(onClick = { actions.updateDeviceName(device.id, nameInput); displayDeviceName = nameInput.trim(); showNameEditor = false }, enabled = nameInput.isNotBlank()) { Text("Update") } },
+            text = { OutlinedTextField(nameInput, { nameInput = it.take(RECEIVER_ID_MAX_LENGTH) }, label = { Text("Receiver ID (max $RECEIVER_ID_MAX_LENGTH characters)") }, singleLine = true) },
+            confirmButton = { Button(onClick = { actions.updateDeviceName(device.id, nameInput); showNameEditor = false }, enabled = nameInput.isNotBlank() && nameInput.length <= RECEIVER_ID_MAX_LENGTH && !isUpdatingDeviceName) { Text("Update") } },
             dismissButton = { OutlinedButton(onClick = { showNameEditor = false }) { Text("Cancel") } },
         )
     }

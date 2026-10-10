@@ -14,9 +14,22 @@ class ChannelMetersTest {
     }
 
     @Test
-    fun inventoryRfBarsChangeColorOnlyAtFullScale() {
+    fun inventoryRfBarsChangeColorAtOverloadThreshold() {
         assertEquals(Color.White, inventoryRfMeterColor(null))
         assertEquals(Color.White, inventoryRfMeterColor(-45.0))
         assertEquals(Color(0xFFFF4D4F), inventoryRfMeterColor(0.0))
+        assertEquals(false, isRfMeterFull(null))
+        assertEquals(false, isRfMeterFull(-10.0))
+        assertEquals(true, isRfMeterFull(-9.0))
+        assertEquals(true, isRfMeterFull(0.0))
+    }
+
+    @Test
+    fun audioMeterOverloadAtCurrentThreshold() {
+        assertEquals(false, isAudioMeterFull(0f))
+        assertEquals(false, isAudioMeterFull(0.89f))
+        assertEquals(true, isAudioMeterFull(0.9f))
+        assertEquals(true, isAudioMeterFull(1f))
+        assertEquals(true, isAudioMeterFull(1.1f))
     }
 }
