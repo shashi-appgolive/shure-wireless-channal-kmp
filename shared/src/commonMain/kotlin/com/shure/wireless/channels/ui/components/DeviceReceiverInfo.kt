@@ -26,10 +26,11 @@ fun DeviceReceiverInfo(
     mutedColor: Color,
     onAllSettingsClick: () -> Unit,
 ) {
+    val deviceNoun = settingsDeviceNoun(receiverModel)
     Column(Modifier.fillMaxWidth().background(surfaceColor).padding(horizontal = 20.dp)) {
-        ReceiverInfoRow("Receiver ID", receiverName, mutedColor)
+        ReceiverInfoRow("$deviceNoun ID", receiverName, mutedColor)
         HorizontalDivider(color = Color(0xFF363B3B))
-        ReceiverInfoRow("Receiver Model", receiverModel, mutedColor)
+        ReceiverInfoRow("$deviceNoun Model", receiverModel, mutedColor)
         HorizontalDivider(color = Color(0xFF363B3B))
         ReceiverInfoRow("Channel Number", channelNumber.toString(), mutedColor)
         HorizontalDivider(color = Color(0xFF363B3B))
@@ -37,7 +38,7 @@ fun DeviceReceiverInfo(
             Modifier.fillMaxWidth().clickable(onClick = onAllSettingsClick).padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("All Receiver Settings", Modifier.weight(1f), color = Color.White, fontSize = 18.sp)
+            Text("All $deviceNoun Settings", Modifier.weight(1f), color = Color.White, fontSize = 18.sp)
             Text("›", color = mutedColor, fontSize = 28.sp)
         }
     }

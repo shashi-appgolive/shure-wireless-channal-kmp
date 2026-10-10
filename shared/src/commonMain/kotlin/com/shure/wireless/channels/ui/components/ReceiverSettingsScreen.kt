@@ -55,6 +55,7 @@ fun ReceiverSettingsScreen(
     onClearError: () -> Unit,
     onUpdateReceiverId: (String, String) -> Unit,
 ) {
+    val deviceNoun = device.settingsDeviceNoun()
     val sections = device.receiverSettingsSections(channelIndex)
     var editing by remember(device.id) { mutableStateOf(false) }
     var draft by remember(device.id) { mutableStateOf("") }
@@ -83,7 +84,7 @@ fun ReceiverSettingsScreen(
                 IconButton(onClick = onBack) {
                     Icon(BackArrowIcon, contentDescription = "Back to channel details", tint = ShureColors.Green)
                 }
-                Text("Receiver Settings", Modifier.weight(1f).padding(start = 6.dp), color = Color.White, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("$deviceNoun Settings", Modifier.weight(1f).padding(start = 6.dp), color = Color.White, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             LazyColumn(contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
                 if (editing && errorMessage != null) {
@@ -106,7 +107,7 @@ fun ReceiverSettingsScreen(
                                         }
                                     }
                                     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                                        Text("Receiver ID", color = Color.White, fontSize = 16.sp)
+                                        Text("$deviceNoun ID", color = Color.White, fontSize = 16.sp)
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             OutlinedTextField(
                                                 value = draft,
@@ -121,17 +122,17 @@ fun ReceiverSettingsScreen(
                                             if (isUpdatingReceiverId) {
                                                 CircularProgressIndicator(Modifier.size(24.dp), color = ShureColors.Green)
                                             } else {
-                                                IconButton(onClick = save, enabled = canSave, modifier = Modifier.semantics { contentDescription = "Save Receiver ID" }) {
+                                                IconButton(onClick = save, enabled = canSave, modifier = Modifier.semantics { contentDescription = "Save $deviceNoun ID" }) {
                                                     Text("✓", color = ShureColors.Green, fontSize = 24.sp)
                                                 }
                                             }
-                                            IconButton(onClick = { editing = false; pendingName = null }, enabled = pendingName == null, modifier = Modifier.semantics { contentDescription = "Cancel Receiver ID edit" }) {
+                                            IconButton(onClick = { editing = false; pendingName = null }, enabled = pendingName == null, modifier = Modifier.semantics { contentDescription = "Cancel $deviceNoun ID edit" }) {
                                                 Text("✕", color = mutedColor, fontSize = 20.sp)
                                             }
                                         }
                                     }
                                 } else {
-                                    Box(Modifier.fillMaxWidth().clickable(onClickLabel = "Edit Receiver ID") {
+                                    Box(Modifier.fillMaxWidth().clickable(onClickLabel = "Edit $deviceNoun ID") {
                                         onClearError()
                                         draft = row.value
                                         editing = true

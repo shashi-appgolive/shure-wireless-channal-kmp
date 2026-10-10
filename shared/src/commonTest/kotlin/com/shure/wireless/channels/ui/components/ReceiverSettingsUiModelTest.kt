@@ -15,6 +15,22 @@ import kotlin.test.assertFalse
 
 class ReceiverSettingsUiModelTest {
     @Test
+    fun psmModelsUseTransmitterTerminology() {
+        listOf("ADTD", "ADTQ", "P10T", "PSM1000").forEach { model ->
+            val device = DiscoveredDevice(
+                id = "id",
+                interfaceInfo = DeviceInterfaceInfo(model = model),
+                features = DeviceFeatures(name = "Transmitter A"),
+            )
+
+            val section = device.receiverSettingsSections(0).first()
+            assertEquals("TRANSMITTER INFORMATION", section.title)
+            assertEquals(listOf("Transmitter ID", "Transmitter Model"), section.rows.take(2).map { it.label })
+            assertEquals("Transmitter", settingsDeviceNoun(model))
+        }
+    }
+
+    @Test
     fun onlyAvailableSectionsAndRowsAreShown() {
         val device = DiscoveredDevice(
             id = "id",

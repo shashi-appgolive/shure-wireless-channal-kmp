@@ -35,6 +35,7 @@ import com.shure.wireless.channels.ui.components.DeviceReceiverInfo
 import com.shure.wireless.channels.ui.components.ChannelAudioSettingsScreen
 import com.shure.wireless.channels.ui.components.ChannelRfSettingsScreen
 import com.shure.wireless.channels.ui.components.ReceiverSettingsScreen
+import com.shure.wireless.channels.ui.components.settingsDeviceNoun
 import com.shure.wireless.channels.ui.theme.ShureColors
 
 @Composable
@@ -54,6 +55,7 @@ internal fun ChannelDetailScreen(
     onBack: () -> Unit,
 ) {
     val model = device.interfaceInfo?.model ?: "Shure device"
+    val deviceNoun = device.settingsDeviceNoun()
     val rfChannel = device.features.rfChannels.getOrNull(channelIndex)
     val audioChannel = device.features.audioChannels.getOrNull(channelIndex)
     val channelName = audioChannel?.features?.name
@@ -135,7 +137,7 @@ internal fun ChannelDetailScreen(
                 }
                 item { ChannelSectionTitle("DEVICE CONNECTION") }
                 item { DeviceConnectionInfo(surfaceColor = Color(0xFF1C1C1E), mutedColor = ShureColors.TextMuted) }
-                item { ChannelSectionTitle("RECEIVER") }
+                item { ChannelSectionTitle(deviceNoun.uppercase()) }
                 item {
                     DeviceReceiverInfo(
                         receiverName = device.features.name ?: device.id,
@@ -153,7 +155,7 @@ internal fun ChannelDetailScreen(
         AlertDialog(
             onDismissRequest = { showNameEditor = false },
             title = { Text("Update device name") },
-            text = { OutlinedTextField(nameInput, { nameInput = it.take(RECEIVER_ID_MAX_LENGTH) }, label = { Text("Receiver ID (max $RECEIVER_ID_MAX_LENGTH characters)") }, singleLine = true) },
+            text = { OutlinedTextField(nameInput, { nameInput = it.take(RECEIVER_ID_MAX_LENGTH) }, label = { Text("$deviceNoun ID (max $RECEIVER_ID_MAX_LENGTH characters)") }, singleLine = true) },
             confirmButton = {
                 Button(onClick = { onUpdateDeviceName(device.id, nameInput); showNameEditor = false }, enabled = nameInput.isNotBlank() && nameInput.length <= RECEIVER_ID_MAX_LENGTH && !isUpdatingDeviceName) {
                     Text("Update")

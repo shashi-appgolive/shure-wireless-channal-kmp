@@ -11,7 +11,15 @@ internal data class ReceiverSettingRow(
 )
 internal data class ReceiverSettingSection(val title: String, val rows: List<ReceiverSettingRow>)
 
+private val transmitterModels = setOf("ADTD", "ADTQ", "P10T", "PSM1000")
+
+internal fun settingsDeviceNoun(model: String?): String =
+    if (model?.trim()?.uppercase() in transmitterModels) "Transmitter" else "Receiver"
+
+internal fun DiscoveredDevice.settingsDeviceNoun(): String = settingsDeviceNoun(interfaceInfo?.model)
+
 internal fun DiscoveredDevice.receiverSettingsSections(channelIndex: Int): List<ReceiverSettingSection> {
+    val deviceNoun = settingsDeviceNoun()
     val band = features.rfChannels.getOrNull(channelIndex)?.assignedRfBand
     val range = band?.frequencyRanges?.firstOrNull { it.min != null && it.max != null }
     val rangeText = range?.min?.let { min ->
@@ -21,8 +29,8 @@ internal fun DiscoveredDevice.receiverSettingsSections(channelIndex: Int): List<
     }
 
     val receiver = buildList {
-        addSetting("Receiver ID", features.name, highlighted = true, editable = true)
-        addSetting("Receiver Model", interfaceInfo?.model)
+        addSetting("$deviceNoun ID", features.name, highlighted = true, editable = true)
+        addSetting("$deviceNoun Model", interfaceInfo?.model)
         addSetting("Band", band?.band ?: features.rfBand)
         addSetting("Range", rangeText)
         addSetting("Firmware Version", features.firmware?.version)
@@ -47,7 +55,7 @@ internal fun DiscoveredDevice.receiverSettingsSections(channelIndex: Int): List<
         addSetting("Dante Name", features.danteAudioNetworkName)
     }
     return listOf(
-        ReceiverSettingSection("RECEIVER INFORMATION", receiver),
+        ReceiverSettingSection("${deviceNoun.uppercase()} INFORMATION", receiver),
         ReceiverSettingSection("NETWORK", network),
         ReceiverSettingSection("SHURE CONTROL", control),
         ReceiverSettingSection("DANTE PRIMARY", dante),

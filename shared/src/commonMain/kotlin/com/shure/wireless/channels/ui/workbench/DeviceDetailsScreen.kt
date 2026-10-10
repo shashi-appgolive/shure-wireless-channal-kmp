@@ -22,6 +22,7 @@ import com.shure.wireless.channels.ui.components.DeviceDetailsHeader
 import com.shure.wireless.channels.ui.components.DeviceReceiverInfo
 import com.shure.wireless.channels.ui.components.ReceiverSettingsScreen
 import com.shure.wireless.channels.ui.components.RfChannelDetails
+import com.shure.wireless.channels.ui.components.settingsDeviceNoun
 
 @Composable
 fun DeviceDetailsScreen(
@@ -40,6 +41,7 @@ fun DeviceDetailsScreen(
     mutedColor: Color,
 ) {
     val details = device.toDeviceDetailsUiModel(channelIndex)
+    val deviceNoun = device.settingsDeviceNoun()
     val rfChannel = device.features.rfChannels.getOrNull(channelIndex)
     val audioChannel = device.features.audioChannels.getOrNull(channelIndex)
     var showNameEditor by remember { mutableStateOf(false) }
@@ -135,7 +137,7 @@ fun DeviceDetailsScreen(
             }
             item { Text("DEVICE CONNECTION", color = mutedColor, modifier = Modifier.padding(horizontal = 24.dp)) }
             item { DeviceConnectionInfo(surfaceColor, mutedColor) }
-            item { Text("RECEIVER", color = mutedColor, modifier = Modifier.padding(horizontal = 24.dp)) }
+            item { Text(deviceNoun.uppercase(), color = mutedColor, modifier = Modifier.padding(horizontal = 24.dp)) }
             item {
                 DeviceReceiverInfo(
                     receiverName = displayDeviceName,
@@ -152,7 +154,7 @@ fun DeviceDetailsScreen(
         AlertDialog(
             onDismissRequest = { showNameEditor = false },
             title = { Text("Update device name") },
-            text = { OutlinedTextField(nameInput, { nameInput = it.take(RECEIVER_ID_MAX_LENGTH) }, label = { Text("Receiver ID (max $RECEIVER_ID_MAX_LENGTH characters)") }, singleLine = true) },
+            text = { OutlinedTextField(nameInput, { nameInput = it.take(RECEIVER_ID_MAX_LENGTH) }, label = { Text("$deviceNoun ID (max $RECEIVER_ID_MAX_LENGTH characters)") }, singleLine = true) },
             confirmButton = { Button(onClick = { actions.updateDeviceName(device.id, nameInput); showNameEditor = false }, enabled = nameInput.isNotBlank() && nameInput.length <= RECEIVER_ID_MAX_LENGTH && !isUpdatingDeviceName) { Text("Update") } },
             dismissButton = { OutlinedButton(onClick = { showNameEditor = false }) { Text("Cancel") } },
         )
