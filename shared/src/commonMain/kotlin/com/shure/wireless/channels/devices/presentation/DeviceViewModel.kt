@@ -9,6 +9,7 @@ import com.shure.wireless.channels.core.common.NoParams
 import com.shure.wireless.channels.core.common.onFailure
 import com.shure.wireless.channels.core.common.onSuccess
 import com.shure.wireless.channels.devices.domain.model.StoredDevice
+import com.shure.wireless.channels.devices.domain.model.DiscoveredDevice
 import com.shure.wireless.channels.devices.domain.usecase.ConnectDeviceUseCase
 import com.shure.wireless.channels.razorsdk.RazorSdk
 import com.shure.wireless.channels.devices.domain.usecase.GetStoredDevicesUseCase
@@ -20,11 +21,14 @@ import com.shure.wireless.channels.di.defaultGraphQlBaseUrl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class DeviceViewModel(
     private val getStoredDevicesUseCase: GetStoredDevicesUseCase,
@@ -48,10 +52,15 @@ class DeviceViewModel(
     private var discoveryJob: Job? = null
     private var deviceModelsJob: Job? = null
     private var discoveryConnectionsJob: Job? = null
+    private var discoveryPollingJob: Job? = null
+    private val discoveryMutex = Mutex()
+    private var activeDiscoveryEndpoint = defaultGraphQlBaseUrl()
     private val meterJobs = mutableMapOf<String, Job>()
     private val rfMeterJobs = mutableMapOf<String, Job>()
     private val audioListenerCounts = mutableMapOf<String, Int>()
     private val rfListenerCounts = mutableMapOf<String, Int>()
+    private var inventoryAudioChannelIds = emptySet<String>()
+    private var inventoryRfChannelIds = emptySet<String>()
     private var eventsJob: Job? = null
 
     init {
@@ -59,6 +68,7 @@ class DeviceViewModel(
         observeLogs()
         observeDevices()
         discoverDevices(_uiState.value.inventory.endpoint)
+        startDiscoveryPolling()
         viewModelScope.launch {
             delay(SPLASH_DURATION_MILLIS)
             _uiState.update { it.copy(isSplashVisible = false) }
@@ -74,6 +84,7 @@ class DeviceViewModel(
             return
         }
         if (endpoint != _uiState.value.inventory.endpoint) {
+            activeDiscoveryEndpoint = endpoint
             discoveryJob?.cancel()
             stopInventoryMeters()
             _uiState.update {
@@ -110,8 +121,73 @@ class DeviceViewModel(
     }
 
     private fun stopInventoryMeters() {
-        meterJobs.keys.toList().forEach(::stopListening)
-        rfMeterJobs.keys.toList().forEach(::stopRfListening)
+        inventoryAudioChannelIds.forEach(::stopListening)
+        inventoryRfChannelIds.forEach(::stopRfListening)
+        inventoryAudioChannelIds = emptySet()
+        inventoryRfChannelIds = emptySet()
+    }
+
+    private fun syncInventoryMeters(devices: List<DiscoveredDevice>) {
+        val audioIds = devices.flatMap { device -> device.features.audioChannels.map { it.id } }.toSet()
+        val rfIds = devices.flatMap { device -> device.features.rfChannels.map { it.id } }.toSet()
+
+        (inventoryAudioChannelIds - audioIds).forEach(::stopListening)
+        (audioIds - inventoryAudioChannelIds).forEach(::startListening)
+        (inventoryRfChannelIds - rfIds).forEach(::stopRfListening)
+        (rfIds - inventoryRfChannelIds).forEach(::startRfListening)
+
+        inventoryAudioChannelIds = audioIds
+        inventoryRfChannelIds = rfIds
+    }
+
+    private fun startDiscoveryPolling() {
+        if (!AUTO_DISCOVERY_REFRESH_ENABLED) return
+        discoveryPollingJob?.cancel()
+        discoveryPollingJob = viewModelScope.launch {
+            while (isActive) {
+                delay(DISCOVERY_REFRESH_INTERVAL_MILLIS)
+                refreshDiscoveredDevices(activeDiscoveryEndpoint, showLoading = false, reportErrors = false)
+            }
+        }
+    }
+
+    private suspend fun refreshDiscoveredDevices(
+        endpoint: String,
+        showLoading: Boolean,
+        reportErrors: Boolean,
+    ) = discoveryMutex.withLock {
+        if (endpoint != activeDiscoveryEndpoint) return@withLock
+        if (showLoading) _uiState.update { it.copy(isDiscovering = true, errorMessage = null) }
+
+        try {
+            val devices = razorSdk.devices.discoverConnections(endpoint).devices
+            if (endpoint != activeDiscoveryEndpoint) return@withLock
+
+            _uiState.update { state ->
+                state.copy(
+                    discoveredConnections = devices,
+                    inventory = state.inventory.copy(
+                        selectedDeviceId = state.inventory.selectedDeviceId?.takeIf { id -> devices.any { it.id == id } },
+                    ).withDevices(devices),
+                    isDiscovering = if (showLoading) false else state.isDiscovering,
+                    errorMessage = if (reportErrors) null else state.errorMessage,
+                )
+            }
+            syncInventoryMeters(devices)
+            Logger.d(TAG, "Discovery refresh completed: ${devices.size} devices")
+        } catch (error: CancellationException) {
+            if (showLoading && endpoint == activeDiscoveryEndpoint) {
+                _uiState.update { it.copy(isDiscovering = false) }
+            }
+            throw error
+        } catch (error: Exception) {
+            Logger.w(TAG, "Discovery refresh failed: ${error.message}")
+            if (showLoading && endpoint == activeDiscoveryEndpoint) {
+                _uiState.update { it.copy(isDiscovering = false, errorMessage = error.message ?: DEFAULT_ERROR_MESSAGE) }
+            } else if (reportErrors && endpoint == activeDiscoveryEndpoint) {
+                _uiState.update { it.copy(errorMessage = error.message ?: DEFAULT_ERROR_MESSAGE) }
+            }
+        }
     }
 
     private fun observeLogs() {
@@ -162,31 +238,11 @@ class DeviceViewModel(
             return
         }
 
+        activeDiscoveryEndpoint = endpoint
         discoveryJob?.cancel()
         discoveryJob = viewModelScope.launch {
             Logger.d(TAG, "Device discovery requested for $endpoint")
-            _uiState.update { it.copy(isDiscovering = true, errorMessage = null) }
-            runCatching { razorSdk.devices.discoverConnections(endpoint) }
-                .onSuccess { devices ->
-                    Logger.d(TAG, "Discovery result received: ${devices.devices.size} devices")
-                    stopInventoryMeters()
-                    _uiState.update { state ->
-                        state.copy(
-                            discoveredConnections = devices.devices,
-                            inventory = state.inventory.copy(
-                                selectedDeviceId = state.inventory.selectedDeviceId?.takeIf { id -> devices.devices.any { it.id == id } },
-                            ).withDevices(devices.devices),
-                            isDiscovering = false,
-                            errorMessage = null,
-                        )
-                    }
-                    devices.devices.flatMap { it.features.audioChannels }.map { it.id }.distinct().forEach(::startListening)
-                    devices.devices.flatMap { it.features.rfChannels }.map { it.id }.distinct().forEach(::startRfListening)
-                }
-                .onFailure { error ->
-                    if (error is CancellationException) throw error
-                    _uiState.update { it.copy(isDiscovering = false, errorMessage = error.message ?: DEFAULT_ERROR_MESSAGE) }
-                }
+            refreshDiscoveredDevices(endpoint, showLoading = true, reportErrors = true)
         }
     }
 
@@ -326,6 +382,7 @@ class DeviceViewModel(
     }
 
     override fun onCleared() {
+        discoveryPollingJob?.cancel()
         meterJobs.values.forEach(Job::cancel)
         meterJobs.clear()
         audioListenerCounts.clear()
@@ -485,6 +542,8 @@ class DeviceViewModel(
         const val SAVE_DEVICES_USE_CASE = "SaveStoredDevicesUseCase"
         const val EVENT_TAG = "DeviceEvent"
         const val MAX_EVENTS = 20
+        const val AUTO_DISCOVERY_REFRESH_ENABLED = false // Set to false to disable automatic discovery refresh polling
+        const val DISCOVERY_REFRESH_INTERVAL_MILLIS = 3_000L
         const val SPLASH_DURATION_MILLIS = 1500L
         const val DEFAULT_ERROR_MESSAGE = "Something went wrong. Please try again."
     }
